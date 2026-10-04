@@ -32,16 +32,16 @@ const pick = arr => arr[(Math.random() * arr.length) | 0];
 // fans: on top of that; Wednesday's keynote and packed rooms keep the first-timers a little busier (it is the hardest day)
 // breaks: [from, to, kind] on the Devoxx Belgium 2026 schedule. People stay in the rooms during the talks and all
 // come out at once for the breaks. keynote: the opening keynote in Room 8 (Wednesday until 11:30); closing: from then
-// on everyone heads to Room 8 for the closing keynote (Thursday 18:50); boothsFrom: the exhibition is set up that afternoon
+// on everyone heads to the closing keynote's room (closingRoom: Room 5 on the schedule; Thursday 18:50); boothsFrom: the exhibition is set up that afternoon
 const DEEP_DIVE_BREAKS = [['12:30', '13:30', 'lunch'], ['16:30', '16:50', 'coffee'], ['17:20', '17:35', 'break'], ['18:05', '18:20', 'break'], ['18:50', '19:00', 'break']];
 export const DAYS = [
-  { name: 'Monday', kind: 'Deep Dive · 3-hour sessions', crowd: 0.55, trouble: 0.55, newcomers: 1, stay: 1.8, end: '20:00', seconds: 180, breaks: DEEP_DIVE_BREAKS, boothsFrom: '14:00' },
-  { name: 'Tuesday', kind: 'Deep Dive · 3-hour sessions', crowd: 0.65, trouble: 0.65, newcomers: 0.5, stay: 1.8, end: '20:00', seconds: 180, breaks: DEEP_DIVE_BREAKS },
-  { name: 'Wednesday', kind: 'Conference · opening keynote', crowd: 1.0, trouble: 0.75, newcomers: 1, fans: 0.8, end: '19:50', seconds: 180, keynote: '11:30',
+  { name: 'Monday', kind: 'Deep Dive · 3-hour sessions', crowd: 0.55, trouble: 0.55, newcomers: 1, stay: 1.8, end: '20:00', seconds: 188, breaks: DEEP_DIVE_BREAKS, boothsSoon: 'TUESDAY' }, // the exhibition hall opens on Tuesday (Devoxx FAQ)
+  { name: 'Tuesday', kind: 'Deep Dive · 3-hour sessions', crowd: 0.65, trouble: 0.65, newcomers: 0.5, stay: 1.8, end: '20:00', seconds: 188, breaks: DEEP_DIVE_BREAKS },
+  { name: 'Wednesday', kind: 'Conference · opening keynote', crowd: 1.0, trouble: 0.75, newcomers: 1, fans: 0.8, end: '19:50', seconds: 188, keynote: '11:30',
     breaks: [['11:30', '12:00', 'coffee'], ['12:50', '14:00', 'lunch'], ['14:50', '15:10', 'break'], ['16:00', '16:40', 'coffee'], ['17:30', '17:50', 'break'], ['18:40', '19:50', 'evening']] },
-  { name: 'Thursday', kind: 'Conference · closing keynote', crowd: 0.85, trouble: 0.85, newcomers: 0.5, end: '19:50', seconds: 180, boothsLeave: 0.5, closing: '18:50', // exhibitors pack up after lunch
+  { name: 'Thursday', kind: 'Conference · closing keynote', crowd: 0.85, trouble: 0.85, newcomers: 0.5, end: '19:50', seconds: 188, boothsLeave: 0.5, closing: '18:50', closingRoom: 5, // exhibitors pack up after lunch
     breaks: [['10:20', '10:40', 'break'], ['11:30', '11:50', 'break'], ['12:40', '13:50', 'lunch'], ['14:40', '15:00', 'break'], ['15:50', '16:30', 'coffee'], ['17:20', '17:40', 'break'], ['18:30', '18:50', 'break']] },
-  { name: 'Friday', kind: 'Conference · calm half day', crowd: 0.6, trouble: 0.7, newcomers: 0.45, end: '12:40', seconds: 100, boothsGone: true, // fewer people, no exhibitors
+  { name: 'Friday', kind: 'Conference · calm half day', crowd: 0.6, trouble: 0.7, newcomers: 0.45, end: '12:40', seconds: 114, boothsGone: true, // fewer people, no exhibitors
     breaks: [['10:20', '10:40', 'break'], ['11:30', '11:50', 'break']] },
 ];
 export const PESTS = {
@@ -52,6 +52,8 @@ export const LOUNGE = chargers[0].rect; // the charging corner at the top of the
 
 const HIT = 8;          // calm lost each time a pest does its thing (about every 1.3 s: ~6/s)
 const CROWD_FREE = 5, CROWD_DRAIN = 0.9; // beyond 5 people close by, every extra one wears you down
+// …depending on the job: a crowd breaks a technician's focus, a guide works among people, and crowds are security's job
+const CROWD_BY_JOB = { voxxy: 1.2, droid: 1, biggy: 0.8 };
 const NICE_HEAL = 7;    // patience/s next to a nice attendee
 const LOUNGE_HEAL = 16; // energy/s on a charging base
 const REST_HEAL = 6;    // energy/s for a robot stopped with nobody around (away from the crowd)
@@ -66,26 +68,32 @@ const RELIEF = 15;       // calm a robot gets back when Biggy's pest gives up
 export const DETER = 1.5; const DETER_R = 26; // a pest standing this close to Biggy for this long gives up
 // Fans are kind, but now and then one gets carried away: "just one more!", and they call a friend over.
 // That's Biggy's job: it stands by them and they calm down. Left alone, they run out of steam after a while.
+// Biggy is security, and it shows: its own fans take one photo less, and a crowd carried away around it calms down twice as fast
+const BIGGY_FAN_GOAL = 2;
 const CARRIED_CHANCE = 0.3, CARRIED_MAX = 30; // chance (× the day's crowd) that a fan gets carried away; seconds before they stop on their own
 const CLINGY_AFTER = 15; // a fan who has followed a busy robot around this long becomes Biggy's job too
 const BORED = 4;         // seconds a pest waits outside a charging base before it gives up
+const VOXXY_HINT_AFTER = 12; // seconds of play a breakdown waits, while you steer Voxxy, before the game reminds you
 const STRESSED = 75;     // below this, staying with a friend (hold E) comes before a repair; above it, after
 const COMFORT = 14, COMFORT_BIGGY = 22, COMFORT_SELF = 3; // calm/s from company: big, steady Biggy is the most reassuring
 const AMBIENT = 110;    // people walking between talks
+const DAY_START = 8 * 60 + 30; // the doors open at 8:30, and people start coming in (Jessica); the talks start at 9:30
+const EARLY = 0.2;      // the share of them already in at 8:30: the rest come in by the main entrance until 9:00
 const HALLWAY = 0.15;   // the share who skip the next talk and stay out: the booths, a coffee, a standing table
 const START_CLEAR = 90;  // when the doors open, nobody is dropped this close to a robot (the crowd drain counts people within 60)
 
 // Spills: coffee, soda and popcorn end up on the floor where people gather. The small cleaning
 // robots (the rest of the robot staff, not playable) mop them up on their own.
-const SPILL_SPOTS = [[1090, 370, 200, 120], [450, 330, 170, 40], [450, 460, 170, 40], [220, 350, 1060, 130], g0([520, 220, 900, 240])];
+const SPILL_SPOTS = [[1090, 370, 200, 120], [450, 330, 170, 40], [450, 460, 170, 40], [220, 350, 1060, 130], g0([590, 150, 880, 680])];
 const SPILL_DRAIN = 0.05, CLEAN_TIME = 1.5, CLEANER_SPEED = 42;
 const CLEANER_ROUNDS = [[[1240, 465], [1100, 415], [700, 415], [300, 415], [700, 415]],       // one cleaner upstairs,
-  [[740, 250 + GROUND], [1040, 465 + GROUND], [1125, 300 + GROUND], [940, 250 + GROUND], [560, 440 + GROUND], [350, 480 + GROUND]]]; // one in the exhibition hall, along its aisles
+  [[740, 295 + GROUND], [1080, 300 + GROUND], [1100, 540 + GROUND], [850, 640 + GROUND], [560, 780 + GROUND], [350, 600 + GROUND]]]; // one in the exhibition hall, along its aisles
 
 // Attendees are nice, until a problem drags on: then someone says so out loud (nobody follows a robot around)
 const COMPLAIN_AFTER = { projector: [12, 35], lost: 18, bag: 16 }; // seconds broken / seconds lost / seconds a bag lies alone
 // seconds Biggy stands by a bag; satisfaction lost per second while one lies alone (or while people sit on the stairs);
 // the energy Biggy spends per second of a security check (it's work too)
+export const BUBBLE_TYPING = 0; // no typing dots: the words show at once (the bubble still pops and shimmers)
 export const BAG_CHECK = 1.6; const BAG_UNEASE = 0.07, EXIT_UNEASE = 0.06, SECURITY_STRAIN = 3;
 
 // What can break. In a room: the projector, the Wi-Fi or the mic. In the corridor: the coffee
@@ -113,12 +121,12 @@ export const SPOTS = {
   popcorn: { place: 'the popcorn machine in the lounge', short: 'the popcorn', what: 'popcorn', panel: [popcornMachine[0] + popcornMachine[2] / 2, popcornMachine[1] - 12], tag: [popcornMachine[0] + popcornMachine[2] / 2 + 60, popcornMachine[1] + 26] },
   coffee: { place: 'the coffee machine in the lounge', short: 'the coffee', what: 'coffee', panel: [coffeeBar[0] + coffeeBar[2] / 2, coffeeBar[1] - 12], tag: [coffeeBar[0] + coffeeBar[2] / 2 + 70, coffeeBar[1] + 20] },
   'coffee:hall': { place: 'the coffee station in the exhibition hall', short: 'the hall coffee', what: 'coffee', panel: under(hallCoffee), tag: [hallCoffee[0] + hallCoffee[2] / 2, hallCoffee[1] - 10] },
-  badges: { place: 'the badge printer at reception', short: 'the badge printer', what: 'badges', panel: [292, 380 + GROUND], tag: [298, 342 + GROUND] }, // beside the stairs, where the reception is
+  badges: { place: 'the badge printer at reception', short: 'the badge printer', what: 'badges', panel: [315, 518 + GROUND], tag: [315, 392 + GROUND] }, // at the reception desk, past the top of the stairs
   ...Object.fromEntries(bofRooms.map(b => [`bof:${b.n}`, { place: `BOF ${b.n}`, short: `BOF ${b.n}`, panel: [b.rect[0] + b.rect[2] / 2, b.rect[1] + 40], tag: [b.rect[0] + b.rect[2] / 2, b.rect[1] + 54] }])),
   ...Object.fromEntries(toilets.map(t => [`toilets:${t.id}`, { place: `the ${t.sides.length > 1 ? '' : t.sides[0] === 'F' ? "women's " : "men's "}toilets ${t.kiosk ? `by Kinepolis ${t.id}` : t.id === 'hall' ? 'off the exhibition hall' : 'by the BOF rooms'}`, short: 'the toilets', what: 'toilets',
-    panel: t.kiosk ? [t.door[0] + 20, t.door[1] + 22] : t.id === 'hall' ? [t.door[0] - 14, t.door[1] + 20] : [t.door[0] + 20, t.door[1] - 12],
-    tag: t.kiosk ? [t.door[0] + 20, t.door[1] + 38] : t.id === 'hall' ? [t.door[0] - 70, t.door[1] + 24] : [t.door[0] + 20, t.door[1] - 26] }])),
-  ...Object.fromEntries(booths.map(b => [`booth:${b.id}`, { place: `Booth ${b.id}`, short: `Booth ${b.id}`, what: 'booth', panel: b.back ? [b.rect[0] + b.rect[2] / 2, b.rect[1] - 12] : under(b.rect), tag: [b.rect[0] + b.rect[2] / 2, b.rect[1] - 8] }])),
+    panel: t.kiosk || t.id === 'hall' ? [t.door[0] + 20, t.door[1] + 22] : [t.door[0] + 20, t.door[1] - 12],
+    tag: t.kiosk || t.id === 'hall' ? [t.door[0] + 20, t.door[1] + 38] : [t.door[0] + 20, t.door[1] - 26] }])),
+  ...Object.fromEntries(booths.map(b => [`booth:${b.id}`, { place: 'a booth in the hall', short: 'a booth', what: 'booth', panel: b.side === 'right' ? [b.rect[0] + b.rect[2] + 12, b.rect[1] + b.rect[3] / 2] : b.side === 'left' ? [b.rect[0] - 12, b.rect[1] + b.rect[3] / 2] : b.up ? [b.rect[0] + b.rect[2] / 2, b.rect[1] - 12] : under(b.rect), tag: b.side === 'right' ? [b.rect[0] + b.rect[2] + 40, b.rect[1] + b.rect[3] / 2 - 12] : b.side === 'left' ? [b.rect[0] - 40, b.rect[1] + b.rect[3] / 2 - 12] : b.up ? [b.rect[0] + b.rect[2] / 2, b.rect[1] - 26] : [b.rect[0] + b.rect[2] / 2, b.rect[1] + b.rect[3] + 26] }])),
 };
 const GROUND_SPOTS = Object.keys(SPOTS).filter(n => n !== 'coffee' && !n.startsWith('coffee'));
 // Downstairs: some lost attendees are stuck at registration in the exhibition hall. Droid, the
@@ -127,15 +135,15 @@ const DOWNSTAIRS = 0.5; // share of lost attendees who turn up at reception, on 
 
 // what each robot does when it has nothing to do: its rounds
 const ROUNDS = {
-  voxxy: ['checking the projectors', [...rooms.map(r => [r.cx, r.top ? 350 : 480]), [640, 236 + GROUND], [1040, 466 + GROUND]]], // room doors, then the booths
-  droid: ['looking out for lost attendees', [[150, 415], [330, 420 + GROUND], [665, 415]]], // the stairs, reception, the stairs to the hall
-  biggy: ['on patrol', [[260, 415], [1200, 440], [840, 468 + GROUND], [1200, 440]]], // the corridor, both ends, and the hall
+  voxxy: ['checking the projectors', [...rooms.map(r => [r.cx, r.top ? 350 : 480]), [720, 290 + GROUND], [1000, 530 + GROUND]]], // room doors, then the booths
+  droid: ['looking out for lost attendees', [[200, 415], [400, 560 + GROUND], [665, 415]]], // the stairs, reception, the stairs to the hall
+  biggy: ['on patrol', [[260, 415], [1200, 440], [850, 420 + GROUND], [1200, 440]]], // the corridor, both ends, and the hall
 };
 
 // where people can be dropped when the day starts
-const OPEN_AREAS = [[130, 390, 1100, 100], [1090, 380, 190, 100], g0([540, 100, 900, 470])]; // corridor, its far end, exhibition hall
-const ARRIVALS = [[80, 375, 100, 80], [700, 375, 45, 15], [700, 440, 45, 15], g0([50, 250, 60, 270])]; // top of the stairs from reception, top of the stairs from the hall, main entrance (clear of the charging base)
-const RECEPTION = g0([290, 325, 60, 110]); // where lost attendees turn up, by the reception desk (under the stairs)
+const OPEN_AREAS = [[130, 390, 1100, 100], [1090, 380, 190, 100], g0([590, 60, 880, 800])]; // corridor, its far end, exhibition hall
+const ARRIVALS = [[80, 375, 100, 80], [700, 375, 45, 15], [700, 440, 45, 15], g0([70, 370, 50, 480])]; // top of the stairs from reception, top of the stairs from the hall, main entrance (clear of the charging base)
+const RECEPTION = g0([380, 320, 70, 120]); // where lost attendees turn up, by the reception desk (under the stairs)
 
 export class Game {
   constructor(ui) {
@@ -160,7 +168,7 @@ export class Game {
     this.floaters = [];
     this.flashes = [];
     this.satisfaction = 100;
-    this.boothsEmpty = !!this.day.boothsFrom || !!this.day.boothsGone; // Monday: the exhibitors only set up in the afternoon; Friday: none
+    this.boothsEmpty = !!this.day.boothsFrom || !!this.day.boothsSoon || !!this.day.boothsGone; // Monday: the exhibitors only set up in the afternoon; Friday: none
     this.breaks = (this.day.breaks || []).map(([a, b, kind]) => ({ t0: this.clockT(a), t1: this.clockT(b), from: a, to: b, kind }));
     this.breakNow = null; this.breakWarned = null; this.closingSaid = this.keynoteSaid = false;
     // the real talks of the day (titles from the Devoxx Belgium 2026 schedule), and the rooms that have any
@@ -173,7 +181,7 @@ export class Game {
     this.fanHint = this.bagHint = this.exitHint = this.carriedHint = this.clingyHint = false;
     this.stats = { delivered: 0, fixed: 0, shooed: 0, cleaned: 0, bumps: 0, revolts: 0, reboots: 0, stayed: 0, bags: 0, exits: 0, fans: 0 };
     this.lowest = { voxxy: 100, droid: 100, biggy: 100 }; // each robot's lowest calm of the day
-    this.lowestAt = { voxxy: '9:00', droid: '9:00', biggy: '9:00' }; // …and when
+    this.lowestAt = { voxxy: '8:30', droid: '8:30', biggy: '8:30' }; // …and when
     this.stays = []; // each time you stayed with a robot in trouble: who, when, how low it was
     this.dips = []; this.dip = {}; // each time a robot ran down below ALONE_BELOW, and whether someone came
     this.crowd = new Crowd(this);
@@ -197,7 +205,7 @@ export class Game {
     this.spills = [];
     this.bags = []; // unattended bags 🎒
     this.exits = []; // attendees blocking the stairs or the entrance 🚪
-    this.cleaners = [[1240, 465], [700, 400 + GROUND]].map(([x, y], i) => ({ x, y, vx: 0, vy: 0, r: 4, heading: 0, spin: i, target: null, cleanT: 0, round: { i: 0 }, route: CLEANER_ROUNDS[i] }));
+    this.cleaners = [[1240, 465], [740, 295 + GROUND]].map(([x, y], i) => ({ x, y, vx: 0, vy: 0, r: 4, heading: 0, spin: i, target: null, cleanT: 0, round: { i: 0 }, route: CLEANER_ROUNDS[i] }));
 
     this.wallGrid.set(this.staticGrid);
     for (let c = 0; c < N; c++) {
@@ -213,7 +221,9 @@ export class Game {
     this.rebuildCost();
     for (const k of FIELD_KEYS) this.computeField(k);
 
-    for (let i = 0; i < Math.round(AMBIENT * this.day.crowd); i++) {
+    const everyone = Math.round(AMBIENT * this.day.crowd), early = Math.round(everyone * EARLY);
+    this.arriving = { total: everyone - early, done: 0, until: this.clockT('09:00') }; // the others: see update
+    for (let i = 0; i < early; i++) {
       let px, py, tries = 0; // not right on top of a robot: nobody should be half empty before you have done anything
       do { const [x, y, w, h] = pick(OPEN_AREAS); px = rnd(x, x + w); py = rnd(y, y + h); } while (++tries < 30 && (blockedCircle(this.crowdGrid, px, py, 6) || this.robotList.some(r => Math.hypot(r.x - px, r.y - py) < START_CLEAR))); // not inside a booth, a desk or a flight of stairs either
       this.spawnWalker(px, py);
@@ -229,11 +239,11 @@ export class Game {
 
   // ------------------------------------------------------------ people
   spawnWalker(x, y) {
-    // the opening keynote (Wednesday morning) and the closing one (Thursday evening): nearly everyone heads for Room 8
-    const keynote = (this.day.keynote && this.t < this.clockT(this.day.keynote)) || (this.day.closing && this.t >= this.clockT(this.day.closing));
+    // the opening keynote (Wednesday morning, Room 8) and the closing one (Thursday evening, Room 5 on the schedule): nearly everyone heads there
+    const opening = this.day.keynote && this.t < this.clockT(this.day.keynote), closing = this.day.closing && this.t >= this.clockT(this.day.closing), keynote = opening || closing;
     // the hallway track: some skip the talk and stay out, at the booths, a coffee or a standing table (fewer skip a keynote)
     const hallway = Math.random() < (keynote ? HALLWAY / 2 : HALLWAY);
-    const final = hallway ? 'hang' : `room:${keynote && Math.random() < 0.8 ? 8 : this.pickRoom().n}`;
+    const final = hallway ? 'hang' : `room:${keynote && Math.random() < 0.8 ? (closing ? this.day.closingRoom : 8) : this.pickRoom().n}`;
     const k = Math.random(); // people coming in downstairs: some stop at the toilets first
     const up = floorOf(y) === 1;
     // where they stop on the way (the rest go straight to their talk): in a break nearly everyone stops somewhere,
@@ -349,7 +359,7 @@ export class Game {
   // a time of day ('16:30') in game seconds
   clockT(hhmm) {
     const [h, m] = hhmm.split(':').map(Number), [eh, em] = this.day.end.split(':').map(Number);
-    return ((h * 60 + m) - 540) / ((eh * 60 + em) - 540) * this.day.seconds;
+    return ((h * 60 + m) - DAY_START) / ((eh * 60 + em) - DAY_START) * this.day.seconds;
   }
   // what the schedule says right now, for the HUD: the current break, or the next one
   get schedule() {
@@ -392,7 +402,7 @@ export class Game {
     const soon = this.breaks.find(b => (b.kind === 'lunch' || b.kind === 'coffee') && b.t0 > this.t && b.t0 - this.t < 4);
     if (soon && soon !== this.breakWarned) { this.breakWarned = soon; this.toast(`${soon.kind === 'lunch' ? '🍽 Lunch' : '☕ Coffee break'} at ${soon.from}: the corridors are about to fill up.`, 'bad'); }
     if (this.day.keynote && this.t < 0.5 && !this.keynoteSaid) { this.keynoteSaid = true; this.toast('🎤 Opening keynote at 9:30 in Room 8: the crowd heads there.', 'good'); }
-    if (this.day.closing && !this.closingSaid && this.t >= this.clockT(this.day.closing)) { this.closingSaid = true; this.toast('🎤 Closing keynote at 18:55 in Room 8: everyone heads there!', 'good'); }
+    if (this.day.closing && !this.closingSaid && this.t >= this.clockT(this.day.closing)) { this.closingSaid = true; this.toast(`🎤 Closing keynote at 18:55 in Room ${this.day.closingRoom}: everyone heads there!`, 'good'); }
     if (this.day.boothsFrom && this.boothsEmpty && this.t >= this.clockT(this.day.boothsFrom)) {
       this.boothsEmpty = false;
       this.toast('🔌 The exhibitors arrive and set up their booths in the exhibition hall.', 'good');
@@ -417,6 +427,7 @@ export class Game {
   // Biggy is security: a pest that has to stand next to Biggy soon gives up and goes home.
   deterPests(dt) {
     const big = this.robots.biggy;
+    let calming = false; // keeping order costs Biggy the same for one carried-away fan as for a group of them
     for (const a of this.crowd.list) {
       if (a.kind !== 'pest' || a.leaving) continue;
       // a robot that made it onto a charging base: its pest waits outside, then gets bored
@@ -432,10 +443,10 @@ export class Game {
         const rb = this.robots[a.target];
         if (!this.clingyHint) { this.clingyHint = true; this.toast(`${a.pest.emoji} A fan keeps following ${rb.name} around. ${this.active === 'biggy' ? 'Stand Biggy next to them.' : 'Biggy will step in.'}`, 'bad'); }
       }
-      if (a.carried && (a.carriedT += dt) > CARRIED_MAX) { this.sendHome(a, say(a.clingy ? a.pest.gives : 'carried_done')); continue; } // they run out of steam
+      if (a.carried && (a.carriedT += dt) > (a.target === 'biggy' ? CARRIED_MAX / 2 : CARRIED_MAX)) { this.sendHome(a, say(a.clingy ? a.pest.gives : 'carried_done')); continue; } // they run out of steam
       const near = !big.rogue && a.target !== big.kind && Math.hypot(a.x - big.x, a.y - big.y) < big.r + DETER_R;
       a.deterT = near ? (a.deterT || 0) + dt : Math.max(0, (a.deterT || 0) - dt);
-      if (near && a.carried) big.patience = Math.max(0, big.patience - SECURITY_STRAIN * dt);
+      if (near && a.carried) calming = true;
       if (a.deterT < DETER) continue;
       this.stats.shooed++;
       if (a.carried) this.stats.fans++;
@@ -450,6 +461,7 @@ export class Game {
       }
       audio.chirp();
     }
+    if (calming) big.patience = Math.max(0, big.patience - SECURITY_STRAIN * dt);
   }
 
   bump(a, speed) {
@@ -478,8 +490,14 @@ export class Game {
   toast(msg, kind, first) { if (msg) this.ui.toast(msg, kind, first); } // first: it jumps the queue of messages
   float(x, y, text, color = '#fff', who) {
     // long enough to read: about 55 ms per character on top of a base, between 1.6 s and 4.5 s
-    this.floaters.push({ x, y, text, color, t: 0, life: Math.min(4.5, Math.max(1.6, 1.4 + text.length * 0.055)) });
-    if (/[A-Za-z]/.test(text)) this.ui?.onLine?.(this.t, text, who || this.speakerAt(x, y)); // words, not just 😣 🔊
+    // someone's words (a robot's or an attendee's) come in a speech bubble that types first (… for half a second), so it
+    // gets that half second on top; the game's own notices ("Power is back!") stay plain labels
+    const words = /[A-Za-z]/.test(text), speaker = words ? who || this.speakerAt(x, y) : null;
+    const bubble = words && speaker !== 'Scene' && !/^Game/.test(speaker);
+    // a robot talks in its own colour; people talk in white bubbles, like their 😊 ❓ icons
+    const robot = bubble ? (/^(Voxxy|Droid|Biggy)\b/.exec(speaker)?.[1]?.toLowerCase() || (/^Cleaning robot/.test(speaker) ? 'cleaner' : null)) : null;
+    this.floaters.push({ x, y, text, color, t: 0, bubble, robot, life: Math.min(4.5, Math.max(1.6, 1.4 + text.length * 0.055)) + (bubble ? BUBBLE_TYPING : 0) });
+    if (words) this.ui?.onLine?.(this.t, text, speaker); // words, not just 😣 🔊
   }
   // who is talking: the robot or the attendee standing right under a floating line
   speakerAt(x, y) {
@@ -499,7 +517,7 @@ export class Game {
 
   select(kind) {
     this.viewOverride = null; this.follow = null; // switching robot: the view follows the new one
-    if (this.robots[kind].rogue) { this.toast(`${this.robots[kind].name} is worn out and recharging. Stay with it (hold E) to help.`, 'bad'); return false; }
+    if (this.robots[kind].rogue) { this.toast(`${this.robots[kind].name} is worn out and recharging. Stay with it to help.`, 'bad'); return false; }
     this.active = kind; return true;
   }
 
@@ -517,7 +535,7 @@ export class Game {
           if ((a.actT = (a.actT ?? 0.3) - dt) <= 0) {
             a.actT = rnd(1.1, 1.5); hit += this.pestAct(a, rb);
             // got the photo, pressed the buttons: they leave the robot alone
-            if (a.pest.goal && (a.acts = (a.acts || 0) + 1) >= a.pest.goal && !a.carried) {
+            if (a.pest.goal && (a.acts = (a.acts || 0) + 1) >= (rb.kind === 'biggy' ? BIGGY_FAN_GOAL : a.pest.goal) && !a.carried) {
               if (!a.friend && Math.random() < CARRIED_CHANCE * this.day.crowd) this.getCarriedAway(a, rb);
               else this.sendHome(a, say(a.pest.done, { name: rb.name }));
             }
@@ -525,6 +543,8 @@ export class Game {
         }
         if (a.kind === 'nice' && d < 38) { if (rb.speed < 10) delta += NICE_HEAL; if (Math.random() < dt * 0.25) this.float(a.x, a.y - 12, say(Math.random() < 0.5 ? 'nice' : `nice_${rb.kind}`), '#7bdc6b'); }
       });
+      // several fans at once: the first one counts in full, every other one half (a group is tiring, not a free fall)
+      if (pests > 1) hit *= (1 + 0.5 * (pests - 1)) / pests;
       rb.pester = pester; // shown on the robot's card
       if (pester && !this.fanHint) { // fans are kind: they get their three selfies (or button presses) and go, but it's tiring
         this.fanHint = true;
@@ -533,18 +553,18 @@ export class Game {
       if (!rb.rogue && rb.patience < 30 && this.t > (rb.overworkT ?? 0) + 15) { rb.overworkT = this.t; this.float(rb.x, rb.y - rb.r - 16, `😅 ${say(`overwork_${rb.kind}`)}`, '#ffd27a', rb.name); }
       if (!this.stressHint && rb.patience < 60) {
         this.stressHint = true;
-        this.toast(`${rb.name} is getting tired: stay with it (hold E) or give it a break.`, 'bad');
+        this.toast(`${rb.name} is getting tired: stay with it or give it a break.`, 'bad');
       }
       // a pit stop: parked against a standing table, a robot leans on it and gets its breath back a little
       rb.atTable = !pests && rb.speed < 10 && this.nearTable(rb);
-      if (rb.atTable) { delta += TABLE_HEAL; if (rb.patience < 100 && this.t > (rb.breakSaid || 0) + 5) { rb.breakSaid = this.t; this.float(rb.x, rb.y - rb.r - 8, '🔋 a short break', '#9fdcff'); } }
+      if (rb.atTable) { delta += TABLE_HEAL; if (rb.patience < 100 && this.t > (rb.breakSaid || 0) + 5) { rb.breakSaid = this.t; this.float(rb.x, rb.y - rb.r - 8, '🔋 a short break', '#9fdcff', rb.name); } }
       // a toilet break: parked inside a working toilet block, it gets its energy back too (it never thinks of it on its own)
       rb.atToilet = !pests && rb.speed < 10 && this.inToilets(rb);
       if (rb.atToilet) { delta += TOILET_HEAL; if (rb.patience < 100 && this.t > (rb.breakSaid || 0) + 5) { rb.breakSaid = this.t; this.float(rb.x, rb.y - rb.r - 8, `🚽 ${say(`toilet_${rb.kind}`)}`, '#9fdcff', rb.name); } }
       if (rb.kind === 'voxxy' && this.t - (rb.workingT ?? -9) < 0.1) delta -= REPAIR_STRAIN;
       if (rb.kind === 'droid' && this.crowd.list.some(a => a.state === 'follow')) delta -= ESCORT_STRAIN;
       if (rb.kind === 'biggy' && rb.task === 'on patrol' && rb.speed > 5) delta -= PATROL_STRAIN; // walking its rounds is its job too
-      delta -= Math.max(0, around - CROWD_FREE) * CROWD_DRAIN * (rb.kind === 'biggy' ? 2 : 1) * (rb.atTable || rb.atToilet ? 0.5 : 1); // noise and crowding: Biggy is the broadest, everyone brushes past it
+      delta -= Math.max(0, around - CROWD_FREE) * CROWD_DRAIN * CROWD_BY_JOB[rb.kind] * (rb.atTable || rb.atToilet ? 0.5 : 1); // noise and crowding, as each one's job takes it
       if (this.inLounge(rb) && rb.speed < 10) delta += LOUNGE_HEAL; // plugged in: parked on the base, not driving across it
       // a moment of peace away from the crowd
       rb.resting = !pests && around <= REST_MAX && rb.patience < 100 && rb.speed < 10; // resting means stopping, not walking an empty corridor
@@ -553,7 +573,7 @@ export class Game {
       if ((pests || rb.crowded) && this.t > (rb.stressSaid || 0) + 2.5) { rb.stressSaid = this.t; this.float(rb.x + rnd(-8, 8), rb.y - rb.r - 6, pests ? '😣' : '🔊', '#ff9f9f'); } // a hint, not a shower
       const before = rb.patience;
       rb.patience = Math.max(0, Math.min(100, rb.patience + delta * dt - hit));
-      if (before >= 30 && rb.patience < 30 && this.stressHint) this.toast(`${rb.name} is almost out of energy! Stay with it (hold E).`, 'bad');
+      if (before >= 30 && rb.patience < 30 && this.stressHint) this.toast(`${rb.name} is almost out of energy! Stay with it.`, 'bad');
       if (rb.patience <= 0) this.goRogue(rb);
     }
   }
@@ -570,7 +590,7 @@ export class Game {
     } else {
       // someone pressing its buttons: a startled beep and a twitch
       rb.hitT = 0.3;
-      this.float(rb.x, rb.y - rb.r - 4, 'beep!?', '#ffe14a');
+      this.float(rb.x, rb.y - rb.r - 4, 'beep!?', '#ffe14a', rb.name);
       audio.chirp(); audio.servo();
     }
     return HIT;
@@ -582,7 +602,7 @@ export class Game {
     this.toast(this.active === rb.kind
       ? `${rb.name} is worn out: it heads for a charging base ⚡ and it's yours again once recharged. Take another robot to stay with it.`
       : `${rb.name} is worn out! It stops working and heads for a charging base ⚡`, 'bad', true); // never lost in a pile of breakdowns
-    this.float(rb.x, rb.y - 24, '🔋 WORN OUT', '#ff7ad9');
+    this.float(rb.x, rb.y - 24, '🔋 WORN OUT', '#ff7ad9', rb.name);
     audio.gong();
     // the pests got what they wanted: they flee
     for (const a of this.crowd.list) if (a.kind === 'pest' && a.target === rb.kind && !a.leaving) this.sendHome(a);
@@ -633,6 +653,29 @@ export class Game {
 
   // where a worn-out robot heads: the charging bases, one on each floor
   chargerField(rb) { return this.fields.charger; }
+
+  // the AI's robots steer round each other (and round the one you drive) instead of pushing through: a robot ahead, close,
+  // turns the way to the side, both keeping to their right when they meet head on, and slows a little
+  giveWay(rb, v) {
+    const m = Math.hypot(v.x, v.y);
+    if (!m) return v;
+    let dx = v.x / m, dy = v.y / m, sx = 0, sy = 0;
+    for (const o of this.robotList) {
+      if (o === rb || o.away > 0 || floorOf(o.y) !== floorOf(rb.y)) continue;
+      const rx = o.x - rb.x, ry = o.y - rb.y, d = Math.hypot(rx, ry), R = rb.r + o.r + 26;
+      if (d >= R || d < 0.01) continue;
+      const ahead = (rx * dx + ry * dy) / d; // 1 = straight ahead
+      if (ahead < -0.2) continue; // behind: none of its business
+      const w = (1 - d / R) * (0.6 + ahead);
+      let side = dx * ry - dy * rx >= 0 ? -1 : 1; // pass on the side it is not on…
+      if (Math.abs(dx * ry - dy * rx) / d < 0.25) side = 1; // …and keep right when it is dead ahead
+      sx += (-dy * side) * w * 1.6 - (rx / d) * w * 0.6; sy += (dx * side) * w * 1.6 - (ry / d) * w * 0.6;
+    }
+    if (!sx && !sy) return v;
+    dx += sx; dy += sy;
+    const n = Math.hypot(dx, dy) || 1;
+    return { x: dx / n * m, y: dy / n * m };
+  }
 
   // nudge a steering vector away from walls, so a robot centres itself in doorways
   clear(rb, v) {
@@ -750,8 +793,15 @@ export class Game {
   watchComplaints(dt) {
     for (const n in this.projectors) {
       const p = this.projectors[n];
-      if (!p.broken) { p.brokenT = 0; p.complaints = 0; continue; }
+      if (!p.broken) { p.brokenT = 0; p.complaints = 0; p.voxxyHint = false; continue; }
       if (!this.roomIdle(n)) p.brokenT += dt; // nobody complains in an empty room
+      // you steer Voxxy: the AI doesn't fix things for you, so a breakdown left waiting gets a reminder (once each)
+      if (this.active === 'voxxy' && !p.voxxyHint && p.brokenT > VOXXY_HINT_AFTER && !this.robots.voxxy.rogue) {
+        p.voxxyHint = true;
+        const where = floorOf(this.panelOf(n).y) === floorOf(this.robots.voxxy.y) ? '' : (floorOf(this.panelOf(n).y) ? ' (upstairs)' : ' (ground floor)');
+        const place = this.placeOf(n);
+        this.toast(`🔧 ${place[0].toUpperCase()}${place.slice(1)}${where} still ${p.what === 'toilets' ? 'need' : 'needs'} fixing. You're steering Voxxy: go to the ⚠, or switch robots and Voxxy will handle it.`, 'bad');
+      }
       const due = COMPLAIN_AFTER.projector[p.complaints];
       if (due !== undefined && p.brokenT > due) { // a breakdown that drags on: someone says so out loud (nobody chases Voxxy about it)
         p.complaints++;
@@ -772,16 +822,22 @@ export class Game {
 
   // ------------------------------------------------------------ spills and the cleaning robots
   spill() {
-    if (this.spills.length >= 6) return;
-    for (let tries = 0; tries < 12; tries++) {
-      const [x, y, w, h] = pick(SPILL_SPOTS), px = rnd(x, x + w), py = rnd(y, y + h);
+    if (this.spills.length >= 6) return false;
+    // somebody drops it: an attendee out in an open area (not in a seat, not on the stairs), and the spill lands at their feet
+    const inSpot = (x, y) => SPILL_SPOTS.some(([sx, sy, w, h]) => x >= sx && x <= sx + w && y >= sy && y <= sy + h);
+    const who = this.crowd.list.filter(a => (a.kind === 'walker' || a.kind === 'nice') && !a.leaving && inSpot(a.x, a.y));
+    for (let tries = 0; tries < 12 && who.length; tries++) {
+      const a = who.splice((Math.random() * who.length) | 0, 1)[0];
+      const sp = Math.hypot(a.vx, a.vy) || 1, px = a.x + (a.vx / sp) * 7, py = a.y + (a.vy / sp) * 7 + 3; // just in front of them
       if ([[0, 0], [12, 0], [-12, 0], [0, 12], [0, -12]].some(([ox, oy]) => solidAt(this.wallGrid, px + ox, py + oy))) continue; // not against a wall: cleaners must reach it
       const r = Math.random(), kind = r < 0.45 ? 'coffee' : r < 0.7 ? 'soda' : 'popcorn'; // soda from the fridges in the venue photos, popcorn from the lounge
       this.spills.push({ x: px, y: py, kind, t: 0 });
-      this.float(px, py - 8, say(`spill_${kind}`), '#ffd27a', 'Attendee (spilled it)');
+      a.vx *= 0.2; a.vy *= 0.2; // they stop short
+      this.float(a.x, a.y - a.r - 8, say(`spill_${kind}`), '#ffd27a', 'Attendee (spilled it)');
       if (!this.spillHint) { this.spillHint = true; this.toast(`Spilled ${kind}! The cleaning robots are on it.`, 'good'); }
-      return;
+      return true;
     }
+    return false;
   }
 
   // someone forgets their bag in a corridor or in the hall
@@ -951,16 +1007,16 @@ export class Game {
   }
   nearTable(o) { // touching a standing table (distance from the robot's edge to the table's edge)
     if (floorOf(o.y) !== 1) return false;
-    return tables.some(([x, y]) => Math.hypot(Math.max(x - o.x, 0, o.x - x - TABLE_W), Math.max(y - o.y, 0, o.y - y - TABLE_H)) < o.r + TABLE_REACH);
+    return tables.some(([x, y, w = TABLE_W]) => Math.hypot(Math.max(x - o.x, 0, o.x - x - w), Math.max(y - o.y, 0, o.y - y - TABLE_H)) < o.r + TABLE_REACH);
   }
   // Monday's scripted moment: a robot you're not steering gets overwhelmed by the crowd
   firstWobble() {
     const v = this.robots[this.active === 'droid' ? 'voxxy' : 'droid'];
     if (v.rogue) return;
     v.patience = Math.min(v.patience, 45); this.wobble = v; this.stressHint = true;
-    this.float(v.x, v.y - v.r - 12, '😓 so much work…', '#ff9f9f');
+    this.float(v.x, v.y - v.r - 12, '😓 so much work…', '#ff9f9f', v.name);
     this.toast(this.active
-      ? `${v.name} is running low 😓 ${this.showArrow === false ? 'Go and stay with it: hold E.' : 'Follow the green arrow, then hold E.'}`
+      ? `${v.name} is running low 😓 ${this.showArrow === false ? 'Go and stay with it.' : 'Follow the green arrow.'}`
       : `${v.name} is running low 😓`, 'bad', true); // Monday's lesson: shown at once
   }
   // you stayed with a robot in trouble (counted once per stretch of holding E, not every frame)
@@ -985,7 +1041,7 @@ export class Game {
     p.broken = true; p.fixT = 0;
     p.what = what || SPOTS[n]?.what || pick(ROOM_INCIDENTS);
     p.fix = rollFix(p.what); // how long this one takes: found out once Voxxy is on it
-    const how = this.projHint ? '' : this.active === 'voxxy' ? ' Go to the ⚠ and hold E.' : ' Voxxy is on it.';
+    const how = this.projHint ? '' : this.active === 'voxxy' ? ' Go to the ⚠.' : ' Voxxy is on it.';
     this.projHint = true; // explain it once, then just say where
     const where = floorOf(this.panelOf(n).y) ? '' : ' (ground floor)', place = this.placeOf(n);
     this.toast(p.what === 'coffee' ? `${place[0].toUpperCase()}${place.slice(1)} is empty! ☕${where}${how}`
@@ -1026,7 +1082,7 @@ export class Game {
     if (this.next.exit === undefined) this.next.exit = rnd(45, 60) / tr;
     if ((this.next.exit -= dt) <= 0) { this.blockExit(); this.next.exit = (rnd(50, 70) - k * 8) / tr; }
     this.updateExits(dt);
-    if ((this.next.spill -= dt) <= 0) { this.spill(); this.next.spill = (rnd(12, 18) - k * 4) / tr; }
+    if ((this.next.spill -= dt) <= 0) this.next.spill = this.spill() ? (rnd(12, 18) - k * 4) / tr : 2; // nobody around to drop anything: try again shortly
     // the exhibitors leave (Thursday afternoon, and all of Friday): the booths go dark, nothing left to fix there
     if (!this.boothsEmpty && (this.day.boothsGone || (this.day.boothsLeave && k >= this.day.boothsLeave))) {
       this.boothsEmpty = true;
@@ -1035,6 +1091,12 @@ export class Game {
     }
     this.updateSchedule();
     this.updateToilets();
+    // the morning: people come in by the main entrance, until 9:00
+    const A = this.arriving;
+    if (A && A.done < A.total) {
+      const due = Math.min(A.total, Math.round(A.total * Math.min(1, this.t / A.until)));
+      for (; A.done < due; A.done++) { const [x, y, w, h] = ARRIVALS[3]; this.spawnWalker(rnd(x, x + w), rnd(y, y + h)); }
+    }
     // people coming back out of talks
     for (let i = this.pool.length - 1; i >= 0; i--) if (this.pool[i].t <= this.t) {
       const s = roomByN[this.pool[i].room].seats;
@@ -1055,9 +1117,9 @@ export class Game {
       // except while you stay with one (hold E next to it): then it stops, for a moment, and gets its energy back
       const withYou = rb.kind !== this.active && this.t - (rb.stayT ?? -99) < 0.25;
       if (withYou) { if (!rb.rogue) rb.task = 'taking a break with you'; }
-      else if (rb.rogue) ({ x: ix, y: iy } = this.clear(rb, this.rogueInput(rb)));
+      else if (rb.rogue) ({ x: ix, y: iy } = this.clear(rb, this.giveWay(rb, this.rogueInput(rb))));
       else if (rb.kind === this.active) { ix = input.x; iy = input.y; rb.task = 'you'; }
-      else ({ x: ix, y: iy } = this.clear(rb, this.autoInput(rb)));
+      else ({ x: ix, y: iy } = this.clear(rb, this.giveWay(rb, this.autoInput(rb))));
       if (rb.away > 0) { ix = iy = 0; rb.away -= dt; } // on the stairs for a moment
       rb.update(dt, ix, iy, this.wallGrid, this.fx);
       const meansIt = rb.kind === this.active || rb.viaStairs > this.t - 0.3; // you walked onto them, or the AI is heading for the other floor
@@ -1141,7 +1203,7 @@ export class Game {
       if (nearCoffee && rb.speed < 15) {
         if ((rb.coffeeTimer = (rb.coffeeTimer || 0) + dt) >= 0.8) {
           rb.coffeeBoost = 6.0; rb.coffeeTimer = 0;
-          this.float(rb.x, rb.y - rb.r - 12, '☕ Espresso Boost!', '#ffd27a');
+          this.float(rb.x, rb.y - rb.r - 12, '☕ Espresso Boost!', '#ffd27a', rb.name);
           audio.chime();
         }
       } else { rb.coffeeTimer = 0; }
@@ -1221,14 +1283,14 @@ export class Game {
     if (!rb || rb.rogue) return; // watching, or your robot is recharging
     if (rb.kind === 'droid' && !this.holdTarget) { // E next to a friend means "stay with it", not "wait here"
       const f = this.crowd.list.filter(a => a.state === 'follow');
-      if (f.length) { f.forEach(a => { a.state = 'idle'; a.homeX = a.x; a.homeY = a.y; }); this.float(rb.x, rb.y - 14, 'wait here!', '#ffb050'); }
-      else { audio.chirp(); this.float(rb.x, rb.y - 14, 'beep-boop!', '#ffb050'); }
+      if (f.length) { f.forEach(a => { a.state = 'idle'; a.homeX = a.x; a.homeY = a.y; }); this.float(rb.x, rb.y - 14, 'wait here!', '#ffb050', rb.name); }
+      else { audio.chirp(); this.float(rb.x, rb.y - 14, 'beep-boop!', '#ffb050', rb.name); }
     }
   }
 
   get clock() {
     const { seconds } = this.day, [eh, em] = this.day.end.split(':').map(Number), end = eh + em / 60;
-    const mins = 9 * 60 + Math.min(1, this.t / seconds) * (end - 9) * 60; // 09:00 → the day's end (20:00 on the Deep Dive days, 12:40 on Friday)
+    const mins = DAY_START + Math.min(1, this.t / seconds) * (end * 60 - DAY_START); // 08:30 → the day's end (20:00 on the Deep Dive days, 12:40 on Friday)
     return { text: `${Math.floor(mins / 60)}:${String(Math.floor(mins % 60)).padStart(2, '0')}`, left: Math.max(0, seconds - this.t) };
   }
 

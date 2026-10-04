@@ -41,6 +41,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #h-watch { position: absolute; top: 60px; right: 100px; background: rgba(0,0,0,.6); border: 1px solid rgba(123,220,107,.5); color: #7bdc6b; border-radius: 10px; padding: 6px 12px; font-weight: 700; font-size: 12px; }
 /* the pace of the day: under the floor button (on a touch screen, beside ⏸) */
 #h-speed { position: absolute; top: 104px; right: 12px; pointer-events: auto; background: rgba(0,0,0,.6); border: 1px solid #3a3e48; border-radius: 10px; padding: 6px 12px; font-weight: 700; font-size: 12px; }
+#h-quit { position: absolute; top: 148px; right: 12px; pointer-events: auto; background: rgba(0,0,0,.6); border: 1px solid #3a3e48; border-radius: 10px; padding: 6px 12px; font-weight: 700; font-size: 12px; }
+#h-quit:hover { border-color: #ff5a4a; color: #ff8a7a; }
+body.touch #h-quit { top: 148px; right: 12px; height: 36px; }
 #h-speed:hover { border-color: var(--o); } #h-speed.fast { border-color: #ffd27a; color: #ffd27a; }
 body.touch #h-speed { right: 64px; height: 36px; }
 .hook { font-size: 22px; line-height: 1.35; margin: 4px 0 12px; color: #f3e6d4; font-weight: 600; }

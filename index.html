@@ -24,6 +24,7 @@
     <button id="h-ai" title="Let the AI run all three robots (0). Tap a robot to take one back.">🤖 AI</button>
     <div id="h-watch" class="hidden" title="The AI does the jobs; nobody looks after the robots. F switches the floor you see."></div>
     <button id="h-speed" title="Speed up the day: ×1, ×2 (T)">⏩ ×1</button>
+    <button id="h-quit" title="Quit this game and go back to the title screen">✕ Quit</button>
     <div id="cards"></div>
     <div id="touch" class="hidden">
       <div id="stick"><div id="knob"></div></div>
@@ -42,8 +43,8 @@
         <div class="kicker">DEVOXX BELGIUM · KINEPOLIS ANTWERP</div>
         <h1>Overclocked</h1>
         <p class="hook">The robots can do their jobs.<br>They just don't know when to stop.<br><b>You're the only one who noticed.</b></p>
-        <p class="lead spaced"><span>Voxxy fixes, Droid guides, Biggy keeps order. The AI does the work.</span>
-          <span class="yourjob"><b>Your job:</b> notice when one is running low, stay with it, send it to recharge.</span>
+        <p class="lead spaced"><span>Voxxy fixes, Droid guides, Biggy keeps order, all on their own.</span>
+          <span class="yourjob"><b>Your job:</b> look after them. Stay with a tired robot, give it a break, or take over before it wears out.</span>
           <span><b>For a whole Devoxx week.</b></span></p>
         <div id="hero"></div>
         <button id="t-start" class="primary">Start ▶</button>
@@ -85,7 +86,16 @@
       <button id="p-restart">↻ Restart the day (R)</button>
       <button id="p-arrow">➜ Guide arrow: on</button>
       <button id="p-lines">💬 Save what everyone said</button>
-      <button id="p-quit">Back to title</button>
+      <button id="p-quit">✕ Quit the game (back to title)</button>
+    </div>
+  </section>
+
+  <section id="quitask" class="overlay hidden">
+    <div class="panel">
+      <h2>Quit this game?</h2>
+      <p>You go back to the title screen; this day stops here.</p>
+      <button id="q-no" class="primary">Keep playing</button>
+      <button id="q-yes">✕ Quit</button>
     </div>
   </section>
 

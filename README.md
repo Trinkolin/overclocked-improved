@@ -8,6 +8,8 @@
 
 Voxxy, Droid and Biggy run the conference: they fix breakdowns, guide lost attendees and keep order. They work autonomously, but they never stop on their own. Repairs, escorts, crowds and enthusiastic fans all drain their energy. **Your role is to notice when a robot is running low, stay with it, and send it to recharge**, from Monday to Friday.
 
+> **Improved version.** This repository continues the game after the contest: the real Kinepolis layout, the real talks in their rooms, Biggy's balance, a Quit button, speech bubbles and bug fixes. See [IMPROVED.md](IMPROVED.md), and play it at <https://trinkolin.github.io/overclocked-improved/>. The contest version is unchanged in [Trinkolin/overclocked](https://github.com/Trinkolin/overclocked) and at <https://trinkolin.github.io/overclocked/>.
+
 ![A Wednesday at lunchtime: Droid is worn out and heading for a charging base](docs/screenshot.jpg)
 
 ## Contents

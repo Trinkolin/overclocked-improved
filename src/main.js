@@ -46,7 +46,7 @@ addEventListener('keydown', e => {
     if (e.code === 'KeyF') game.lookAt(1 - game.viewFloor());
     if (e.code === 'PageUp') { e.preventDefault(); game.lookAt(1); }
     if (e.code === 'PageDown') { e.preventDefault(); game.lookAt(0); }
-  } else if (state === 'paused' && (e.code === 'KeyP' || e.code === 'Escape')) pause(false);
+  } else if (state === 'paused' && (e.code === 'KeyP' || e.code === 'Escape')) pause(false); // (also closes the quit question)
   else if (state === 'paused' && e.code === 'KeyR') begin(); // restart the day: only from the pause menu, R is right next to E
   else if (state === 'title' && titleStep === 2 && ROBOT_KEYS[e.code]) choose(ROBOT_KEYS[e.code]);
   else if (state === 'title' && titleStep === 2 && (e.code === 'Digit0' || e.code === 'Numpad0')) choose(AI_ALL);
@@ -161,6 +161,8 @@ function showToast() {
   const { msg, kind } = toastQ.splice(i >= 0 ? i : 0, 1)[0];
   const el = document.createElement('div');
   el.className = `toast ${kind}`; el.textContent = msg;
+  const who = /\b(Voxxy|Droid|Biggy)\b/.exec(msg)?.[1]?.toLowerCase(); // a message about a robot: in that robot's colour
+  if (who) { el.style.borderColor = COLORS[who]; el.style.boxShadow = `0 0 14px ${COLORS[who]}55`; }
   $('#toasts').appendChild(el);
   const stay = Math.min(7000, Math.max(3000, 2400 + msg.length * 45)); // long messages stay long enough to read
   toastOn = { msg, kind, el, t0: Date.now(), timer: setTimeout(endToast, stay) };
@@ -351,8 +353,8 @@ function begin(d = dayIdx) {
   state = 'playing';
   audio.ding();
   ui.toast(firstRobot === AI_ALL
-    ? `${DAYS[dayIdx].name}, 09:00. The AI runs the robots. Take one over any time.`
-    : `${DAYS[dayIdx].name}, 09:00. You steer ${SPECS[firstRobot].name}. Look after all three!`);
+    ? `${DAYS[dayIdx].name}, 08:30. The AI runs the robots. Take one over any time.`
+    : `${DAYS[dayIdx].name}, 08:30. You steer ${SPECS[firstRobot].name}. Look after all three!`);
 }
 
 function pause(on) { state = on ? 'paused' : 'playing'; show(on ? 'paused' : null); }
@@ -544,7 +546,7 @@ setArrow(arrowOn);
 canvas.addEventListener('pointerdown', e => {
   if (state !== 'playing' || !renderer.viewW) return;
   const r = canvas.getBoundingClientRect();
-  const wx = renderer.vx0 + (e.clientX - r.left) * renderer.viewW / r.width, wy = renderer.vy0 + (e.clientY - r.top) * renderer.viewH / r.height;
+  const k = renderer.k || 1, wx = renderer.vx0 + (e.clientX - r.left) * renderer.viewW / r.width / k, wy = renderer.vy0 + (e.clientY - r.top) * renderer.viewH / r.height / k; // (k: the ground floor shown smaller)
   const hit = game.robotList.filter(rb => Math.hypot(rb.x - wx, rb.y - wy) < rb.r + 18).sort((a, b) => Math.hypot(a.x - wx, a.y - wy) - Math.hypot(b.x - wx, b.y - wy))[0];
   if (hit) select(hit.kind);
 });
@@ -583,6 +585,10 @@ $('#t-back3').onclick = () => step(2);
 $('#mute').onclick = () => { audio.init(); $('#mute').textContent = audio.toggleMute() ? '🔇' : '🔊'; };
 $('#p-resume').onclick = () => pause(false);
 $('#p-quit').onclick = () => attract();
+// quitting a game in progress: asked first (the day is paused meanwhile), so that a stray click doesn't end it
+$('#h-quit').onclick = () => { if (state === 'playing') { state = 'paused'; keys.clear(); show('quitask'); } };
+$('#q-no').onclick = () => pause(false);
+$('#q-yes').onclick = () => attract();
 $('#p-restart').onclick = () => begin();
 $('#w-new').onclick = () => begin(0);
 $('#w-again').onclick = () => begin(DAYS.length - 1);

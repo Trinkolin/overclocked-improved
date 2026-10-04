@@ -90,11 +90,12 @@ export const LINES = {
   // a pest that got what it came for, and leaves the robot alone
   done_selfie: ['Perfect shot! 😍', 'Got it! Thanks, {name}!', 'Posting this right now!', 'One for the team chat!', 'My kids will love this!'],
   done_poker: ['Cool, it beeped!', 'Ha, that one lights up!', 'OK, I pressed them all.', 'So that\'s what it does!'],
+  // (only you look after the robots: the fans just lose interest, they don't tell it to rest)
   bored: [
-    'It\'s on a break. Fair enough!',
-    'Rest well! I\'ll come back.',
-    'Break time? Good idea, robot.',
-    'I\'ll let it recharge.',
+    'It\'s plugged in. Boring!',
+    'No selfie with a cable. Later!',
+    'OK, I\'ll find another robot.',
+    'Fine, I\'ll go and see a talk.',
   ],
   // a fan who gets carried away ("just one more!"), calming down when Biggy stands by, or running out of steam
   carried_selfie: ['Just one more! And one with my team!', 'Everyone, come see! A selfie with {name}!', 'One more from this side! And this side!'],
@@ -132,7 +133,7 @@ export const LINES = {
   slip: ['whoa!', 'slippery!', 'careful!', 'woops!'],
   bumped: ['ouch!', 'hey!', 'watch it, big guy!', 'oof!'],
   // a friendly word that fits the robot it's said to
-  nice_voxxy: ['Take a breather, little one.', 'Love the orange one!', 'You fixed our projector earlier!', 'Slow down, speedy!'],
+  nice_voxxy: ['Zoom zoom, little one!', 'Love the orange one!', 'You fixed our projector earlier!', 'So fast! Always on the move!'],
   nice_droid: ['Thanks for showing everyone the way!', 'You got me to my room earlier. Thanks!', 'Tall, patient and always right. Respect.'],
   nice_biggy: ['Thanks for keeping the stairs clear, big guy!', 'Gentle giant!', 'I feel safer with you around.'],
   nice: [

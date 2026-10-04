@@ -1,9 +1,9 @@
 // Drawing: a pre-rendered building layer, dynamic entities, then a cinema
 // lightmap (dim, pools of ceiling light, glowing screens) on top.
-import { W, H, GW, GH, CELL, rooms, ROOM_HUES, coffeeBar, popcornMachine, lounge, stairs, kinepolisRooms, FLOOR_H, GROUND, floorOf, receptionDesk, receptionStairs, hallStairs, hallFlights, poloDesk, hallPillars, corridorPillars, hallStairwells, landingRails, loungeSofas, receptionFlight, hallFlightDefs, bofRooms, booths, mainEntrance, hallCoffee, sideStairs, portals, SEATS, toilets, ramp, hallSteps, stairwells, tables, TABLE_W, TABLE_H, chargers } from './level.js';
+import { W, H, GW, GH, CELL, rooms, ROOM_HUES, coffeeBar, popcornMachine, lounge, stairs, stairsWide, kinepolisRooms, FLOOR_H, floorH, GROUND, floorOf, receptionDesk, receptionStairs, hallStairs, hallFlights, poloDesk, hallPillars, corridorPillars, cafeTables, hallStairwells, landingRails, loungeSofas, receptionFlight, hallFlightDefs, bofRooms, booths, bikeCorner, mainEntrance, hallCoffee, sideStairs, portals, SEATS, toilets, ramp, hallSteps, stairwells, tables, TABLE_W, TABLE_H, chargers } from './level.js';
 import { drawRobot, COLORS, LOW, LOW_BELOW } from './robots.js';
 import { SHIRTS, SKINS, skinOf } from './crowd.js';
-import { LOUNGE, DETER, BAG_CHECK, INCIDENTS, SPOTS } from './game.js';
+import { LOUNGE, DETER, BAG_CHECK, INCIDENTS, SPOTS, BUBBLE_TYPING } from './game.js';
 
 // the kinds of talk in the Devoxx schedule's colours (its theme): Deep Dive green, keynotes and Lunch Talks blue, Conference,
 // Tools-in-Action and BOF grey; Hands-on Labs take the theme's amber. The colour of a title's card says what kind of talk it is
@@ -37,26 +37,57 @@ function card(x, lines, cx, y0, color, now) {
 // The middle block holds about half a row and the side blocks the rest, so the bigger the room, the more seats on the
 // sides (and the back rows, wider, get one more). Drawn only: people can reach any seat.
 const AISLE_W = 12, SEAT_W = 9;
-const aislesOf = r => { const cx = (r.x0 + r.x1) / 2, half = Math.round((r.x1 - r.x0 - 50) * 0.25 / SEAT_W) * SEAT_W; return [cx - half - AISLE_W, cx + half]; };
-const rowsOf = r => Math.floor((r.depth - 34) / 14); // as in the Kinepolis rooms, the rows go all the way to the back wall
-// the projection room: along the back wall, centred on the screen and clear of the door, where the ⚠ panel shows (panelOf in game.js)
-const BOOTH_D = 26, boothOf = r => {
-  const d = r.doors[0], half = Math.min(Math.abs(r.cx - d.x), Math.abs(r.cx - d.x - d.w)) - 4;
-  return { x0: r.cx - half, x1: r.cx + half, y: r.top ? r.y1 - BOOTH_D : r.y0 };
+const aislesOf = r => { const cx = (r.x0 + r.x1) / 2, half = Math.round((r.x1 - r.x0 - 50) * 0.25 / r.seatW) * r.seatW; return [cx - half - AISLE_W, cx + half]; };
+const rowsOf = r => r.rows; // as in the Kinepolis rooms, the rows go all the way to the back wall (level.js)
+// rooms whose look we have from the Kinepolis virtual tour: anthracite walls and a plain dark carpet instead of the red walls
+// and beige floor; Zaal 3 to 9: in front of the cross aisle the rows run unbroken, with an aisle along each side wall (three blocks
+// behind it, as elsewhere); Zaal 3 and 4: one wide middle block, two aisles two seats in from the walls from front to back (LEDs on the steps only); Zaal 10: one aisle only, up its right-hand side behind a low wall, and two wheelchair places in front
+const ROOM_CARPET = '#2f2c2b'; // the rooms' carpet: one plain colour, aisles and cross aisle included (Jessica)
+const TOUR = { walls: '#2c2f36', floor: ROOM_CARPET, frontAtWalls: true };
+const ROOM_LOOK = { 3: { ...TOUR, frontAtWalls: false, doorSeats: 3, doorSeatRows: [[0, 3], [13, 16]] }, 4: { ...TOUR, frontAtWalls: false, sideSeats: 3, doorSeatRows: [[0, 3], [13, 17]] }, 5: { ...TOUR, frontAtWalls: false, sideSeats: 7, doorFew: [13, 17, 4] }, 6: { ...TOUR, frontAtWalls: false, sideSeats: 4, doorSeatRows: [[0, 3], [12, 17]] }, 7: { ...TOUR, frontAtWalls: false, sideSeats: 4, doorSeatRows: [[0, 2], [13, 17]] }, 8: { ...TOUR, frontAtWalls: false, sideSeats: 7, doorFew: [13, 17, 4] }, 9: { ...TOUR, frontAtWalls: false, sideSeats: 4, doorSeatRows: [[0, 3], [13, 17]] }, 10: { walls: '#2c2f36', floor: '#2f2c2b', oneAisle: true, wheelchairs: 2, frontGap: 4, outerSeats: 3, outerRows: 5 } };
+const look = r => ROOM_LOOK[r.n] || {};
+// the aisles of row i (x of each aisle's left edge): the two between the blocks, or a room's own (ROOM_LOOK)
+const aislesAt = (r, i) => {
+  const L = look(r), right = r.x1 - 2 - AISLE_W;
+  if (L.oneAisle) return [right - (L.outerSeats || 0) * r.seatW]; // Zaal 10: its aisle 3 seats in from the wall
+  if (L.doorSeats) { const k = L.doorSeats * r.seatW; return r.doors[0].x < r.cx ? [r.x0 + 2 + k, right] : [r.x0 + 2, right - k]; } // Zaal 3: 19 seats between its two aisles, and 3 more beyond the one on the door's side
+  if (L.sideSeats) { const k = L.sideSeats * r.seatW; return [r.x0 + 2 + k, right - k]; } // Zaal 3 and 4: two aisles two seats in from the walls, front to back (virtual tour)
+  if (L.frontAtWalls && i < r.cross) return [r.x0 + 2, right];
+  if (L.frontSideSeats && i < r.cross) { const k = L.frontSideSeats * r.seatW; return [r.x0 + 2 + k, right - k]; } // Zaal 4: two seats by each wall
+  if (L.frontAisleAtDoor && i < r.cross) return [r.doors[0].x < r.cx ? r.x0 + 2 : right]; // Zaal 3: one, on its door's side
+  return aislesOf(r);
 };
+// the projection room: along the back wall, the whole width of the room (Jessica), above the way in; the ⚠ panel shows on it (panelOf in game.js)
+const GROUND_SHOWN = [20, 1010]; // the part of the ground floor shown whole on a big screen (world y from its top)
+const BOOTH_D = 26, boothOf = r => ({ x0: r.x0 + 2, x1: r.x1 - 2, y: r.top ? r.y1 - BOOTH_D : r.y0 });
 // row i (0: the front row): its y, and the centre of every seat in each of its blocks (lined up on the aisles). In the back
 // rows, the doorways and the projection room stay clear; the cross aisle is a row with no seats
 function rowOf(r, i) {
-  const [a, b] = aislesOf(r), x0 = r.x0 + 2, x1 = r.x1 - 2, h = SEAT_W / 2; // the side blocks run right up to the side walls
-  const y = r.top ? r.y0 + 40 + i * 14 : r.y1 - 40 - i * 14, back = Math.abs(y - (r.top ? r.y1 : r.y0));
+  const A = aislesAt(r, i), x0 = r.x0 + 2, x1 = r.x1 - 2, SW = r.seatW, h = SW / 2; // the side blocks run right up to the side walls
+  const y = r.top ? r.y0 + 40 + i * r.pitch : r.y1 - 40 - i * r.pitch, back = Math.abs(y - (r.top ? r.y1 : r.y0));
   const clear = sx => back >= BOOTH_D + 4 || !r.doors.some(d => sx + h > d.x - 2 && sx - h < d.x + d.w + 2) && !(sx + h > boothOf(r).x0 && sx - h < boothOf(r).x1);
-  const left = [], mid = [], right = [];
-  for (let sx = a - h; sx - h >= x0; sx -= SEAT_W) left.push(sx);
-  for (let sx = a + AISLE_W + h; sx + h <= b; sx += SEAT_W) mid.push(sx);
-  for (let sx = b + AISLE_W + h; sx + h <= x1; sx += SEAT_W) right.push(sx);
+  // the blocks between the aisles: the first lined up on the first aisle (filled leftwards from it), the others on the aisle
+  // to their left
+  const parts = [];
+  for (let k = 0; k <= A.length; k++) {
+    const from = k ? A[k - 1] + AISLE_W : x0, to = k < A.length ? A[k] : x1, seats = [];
+    if (k === 0) { for (let sx = to - h; sx - h >= from - 0.01; sx -= SW) seats.push(sx); seats.reverse(); }
+    else for (let sx = from + h; sx + h <= to + 0.01; sx += SW) seats.push(sx);
+    parts.push(seats);
+  }
+  const L = look(r);
+  if (L.doorFew && i >= L.doorFew[0] && i <= L.doorFew[1]) { // Zaal 5 and 8: 5 rows on the door's side with only 4 seats by the aisle (the way in along the wall): right behind the cross aisle
+    const left = r.doors[0].x < r.cx, p = parts[left ? 0 : parts.length - 1];
+    if (left) p.splice(0, Math.max(0, p.length - L.doorFew[2])); else p.splice(L.doorFew[2]);
+  }
+  if (L.outerSeats && i < r.rows - L.outerRows) parts[parts.length - 1] = []; // Zaal 10: beyond its aisle, 3 seats in the last 5 rows only
+  if (L.frontGap && i === 0) { const p = parts[0]; p.splice(p.length - L.frontGap); } // Zaal 10: the front row, 4 seats short on the aisle side, for the wheelchairs
+  if (L.doorSeatRows && !L.doorSeatRows.some(([a, b]) => i >= a && i <= b)) { // Zaal 3 and 4: those 3 seats only in the first 4 rows and the last 4; between, the way in from the door, along the railing
+    parts[r.doors[0].x < r.cx ? 0 : parts.length - 1] = [];
+  }
   const blocks = [];
   if (i === r.cross) return { y, blocks }; // the cross aisle (level.js), as in the Kinepolis photos
-  for (const block of [left.reverse(), mid, right]) {
+  for (const block of parts) {
     let run = [];
     for (const sx of block) if (clear(sx)) run.push(sx); else if (run.length) { blocks.push(run); run = []; }
     if (run.length) blocks.push(run);
@@ -68,7 +99,8 @@ function rowOf(r, i) {
 const underSeats = a => { if (a.kind === 'pest') return false; for (const r of rooms) if (a.x > r.x0 && a.x < r.x1 && a.y > r.y0 && a.y < r.y1) return r.top ? a.y > r.crossY + 5 : a.y < r.crossY - 5; return false; };
 // the "Room N" screen beside a door: on its left, or on its right when a stairwell is there
 const screenX = d => hallStairwells.some(([sx, , sw]) => d.x - 13 < sx + sw && d.x - 3 > sx) ? d.x + d.w + 3 : d.x - 13;
-const roomAt = (px, py) => rooms.some(r => px > r.x0 && px < r.x1 && py > r.y0 && py < r.y1);
+const roomIn = (px, py) => rooms.find(r => px > r.x0 && px < r.x1 && py > r.y0 && py < r.y1);
+const roomAt = (px, py) => !!roomIn(px, py);
 const SS = 2; // static layer supersampling
 // the system setting "reduce motion": no screen shake (read every frame, it can change while the game runs)
 export const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -138,10 +170,10 @@ export class Renderer {
     // During a talk the house lights go down: see houseLights().
     for (const r of rooms) {
       const rows = rowsOf(r), screenY = r.top ? r.y0 + 6 : r.y1 - 6;
-      x.fillStyle = '#5b544d'; x.fillRect(r.x0, r.top ? r.y0 : r.y1 - 32, r.x1 - r.x0, 32); // the flat floor in front of the screen
-      for (let i = 0; i < 90; i++) { x.fillStyle = i % 2 ? 'rgba(255,240,220,0.08)' : 'rgba(0,0,0,0.12)'; x.fillRect(r.x0 + rand() * (r.x1 - r.x0), (r.top ? r.y0 : r.y1 - 32) + rand() * 32, 1.2, 1.2); }
+      x.fillStyle = look(r).floor || '#5b544d'; x.fillRect(r.x0, r.top ? r.y0 : r.y1 - 32, r.x1 - r.x0, 32); // the flat floor in front of the screen
+      // (a plain carpet, one colour, as in every Kinepolis room)
       for (let i = 0; i < rows; i++) {
-        const { y: ry, blocks } = rowOf(r, i), h = SEAT_W / 2;
+        const { y: ry, blocks } = rowOf(r, i), h = r.seatW / 2;
         for (const seats of blocks) {
           if (!seats.length) continue;
           const bx = seats[0] - h, bw = seats[seats.length - 1] + h - bx;
@@ -152,16 +184,61 @@ export class Renderer {
           for (let k = 1; k < seats.length; k++) x.fillRect(seats[k] - h - 0.5, ry - 4, 1, 8); // armrests
         }
       }
-      // the two aisles between the blocks, up to the back wall: carpeted steps and a handrail on each side
-      const ay = r.top ? r.y0 + 30 : r.y0, al = r.depth - 30;
-      for (const ax of aislesOf(r)) {
-        x.fillStyle = '#1c1b21'; x.fillRect(ax, ay, AISLE_W, al);
-        x.fillStyle = 'rgba(255,255,255,0.07)'; for (let i = 0; i <= rows; i++) x.fillRect(ax, r.top ? r.y0 + 33 + i * 14 : r.y1 - 33 - i * 14, AISLE_W, 1);
-        x.fillStyle = 'rgba(200,206,214,0.5)'; x.fillRect(ax - 0.4, ay + 6, 0.8, al - 12); x.fillRect(ax + AISLE_W - 0.4, ay + 6, 0.8, al - 12);
+      // the aisles, up to the back wall, row by row (a room's front rows may have theirs elsewhere): carpeted steps and a
+      // handrail on each side
+      const step = i => (r.top ? r.y0 + 33 + i * r.pitch : r.y1 - 33 - i * r.pitch); // the edge of step i, in front of row i
+      for (let i = 0; i < rows; i++) {
+        const ya = i === 0 ? (r.top ? r.y0 + 30 : r.y1 - 30) : step(i), yb = i === rows - 1 ? (r.top ? r.y1 : r.y0) : step(i + 1);
+        const top = Math.min(ya, yb), len = Math.abs(yb - ya);
+        for (const ax of aislesAt(r, i)) {
+          x.fillStyle = look(r).floor || ROOM_CARPET; x.fillRect(ax, top, AISLE_W, len); // the same plain carpet as the rest of the room
+          x.fillStyle = 'rgba(255,255,255,0.07)'; x.fillRect(ax, step(i), AISLE_W, 1);
+          for (const wx of [ax - 1.4, ax + AISLE_W - 0.2]) { // a low wall on each side of the aisle (Jessica), with a light top edge
+            x.fillStyle = '#4c4f57'; x.fillRect(wx, top, 1.6, len); x.fillStyle = 'rgba(255,255,255,0.22)'; x.fillRect(wx + 0.5, top, 0.6, len);
+          }
+        }
+      }
+      if (look(r).doorSeatRows) { // Zaal 3 and 4: behind the cross aisle, on the door's side, the way in with a safety railing along the aisle
+        const A0 = aislesAt(r, 0), left = r.doors[0].x < r.cx, ax = left ? A0[0] - 1.5 : A0[A0.length - 1] + AISLE_W + 0.5;
+        const R = look(r).doorSeatRows, yb = R[1] ? (r.top ? r.y0 + 40 + (R[1][0] - 0.5) * r.pitch : r.y1 - 40 - (R[1][0] - 0.5) * r.pitch) : (r.top ? r.y1 - 4 : r.y0 + 4); // up to the last rows' seats, or the back wall // up to the last rows' 3 seats
+        const y0 = r.top ? r.crossY + 5 : yb, y1 = r.top ? yb : r.crossY - 5;
+        x.fillStyle = 'rgba(200,206,214,0.7)'; x.fillRect(ax, y0, 1, y1 - y0); // its barrier
+        if (R[1]) balustrade(x, [left ? r.x0 + 2 : ax + 1, yb - 2, left ? ax - r.x0 - 2 : r.x1 - 3 - ax, 4]); // and a railing across, where the back rows' seats start, as on the stairs (Jessica)
+      }
+      const rowEdge = i => (r.top ? r.y0 + 40 + (i - 0.5) * r.pitch : r.y1 - 40 - (i - 0.5) * r.pitch); // between rows i - 1 and i
+      if (look(r).doorFew) { // Zaal 5 and 8: a railing along the 4 seats, between them and the way in by the wall (Jessica)
+        const L = look(r), A0 = aislesAt(r, L.doorFew[0]), left = r.doors[0].x < r.cx, k = L.doorFew[2] * r.seatW;
+        const bx = left ? A0[0] - k - 4 : A0[A0.length - 1] + AISLE_W + k, ya = rowEdge(L.doorFew[0]), yb = rowEdge(L.doorFew[1] + 1);
+        balustrade(x, [bx, Math.min(ya, yb), 4, Math.abs(yb - ya)]);
+      }
+      if (look(r).outerSeats) { // Zaal 10: a railing across, where its 3 outer seats start (Jessica)
+        const ax = aislesAt(r, 0)[0] + AISLE_W + 1, y = rowEdge(r.rows - look(r).outerRows);
+        balustrade(x, [ax, y - 2, r.x1 - 3 - ax, 4]);
+      }
+      if (look(r).landing) { // Zaal 5: the landing where the foyer door comes in, by the wall behind the cross aisle (Jessica's sketch)
+        const L = look(r), A0 = aislesAt(r, 0), left = r.doors[0].x < r.cx, sw = r.seatW, k = L.doorFew[2] * sw;
+        const lx0 = left ? r.x0 + 2 : A0[A0.length - 1] + AISLE_W + k, lx1 = left ? A0[0] - k : r.x1 - 2;
+        const ya = rowOf(r, L.landing[0]).y, yb = rowOf(r, L.landing[1]).y, top = Math.min(ya, yb) - r.pitch / 2, h = Math.abs(yb - ya) + r.pitch;
+        x.fillStyle = '#3b3538'; x.fillRect(lx0, top, lx1 - lx0, h);
+        x.fillStyle = 'rgba(200,206,214,0.55)'; x.fillRect(left ? lx1 - 1 : lx0, top, 1, h); // its railing along the seats
+        x.fillStyle = '#9aa0ad'; for (const [bx, by] of [[lx0 + (lx1 - lx0) * 0.35, top + h * 0.3], [lx0 + (lx1 - lx0) * 0.65, top + h * 0.3]]) { x.beginPath(); x.arc(bx, by, 2.6, 0, 7); x.fill(); } // the Kinepolis bins
+      }
+      if (look(r).oneAisle) { // the low wall between the seats and the aisle
+        const ax = aislesAt(r, 0)[0]; x.fillStyle = '#4a4547'; x.fillRect(ax - 2, r.top ? r.y0 + 30 : r.y0, 2, r.depth - 30);
+      }
+      for (let k = 0; k < (look(r).wheelchairs || 0); k++) { // the wheelchair places, in front of the first row, on the aisle side
+        const wx = aislesAt(r, 0)[0] + 2 - (k + 1) * (look(r).frontGap ? look(r).frontGap * r.seatW / 2 : 22), wy = r.top ? r.y0 + 36 : r.y1 - 44; // in the front row's gap
+        x.fillStyle = '#2f5fae'; x.fillRect(wx, wy, 14, 10); x.fillStyle = '#ffffff'; x.font = '700 8px system-ui'; x.textAlign = 'center'; x.fillText('♿', wx + 7, wy + 8);
       }
       // the cross aisle between the two tiers: carpet from wall to wall, and the upper tier's railing
-      x.fillStyle = '#3b3538'; x.fillRect(r.x0, r.crossY - 5, r.x1 - r.x0, 10);
-      x.fillStyle = 'rgba(200,206,214,0.55)'; x.fillRect(r.x0 + 4, r.top ? r.crossY + 5 : r.crossY - 6, r.x1 - r.x0 - 8, 1);
+      if (r.cross != null) {
+        x.fillStyle = look(r).floor || ROOM_CARPET; x.fillRect(r.x0, r.crossY - 5, r.x1 - r.x0, 10);
+        for (const by of [r.crossY - 5.5, r.crossY + 4.5]) { // a barrier along each side of it, open where the aisles cross it
+          const gaps = aislesAt(r, r.cross).concat(aislesAt(r, r.cross + 1)), open = px => gaps.some(ax => px > ax - 1 && px < ax + AISLE_W + 1);
+          x.fillStyle = 'rgba(200,206,214,0.6)';
+          for (let px = r.x0 + 4; px < r.x1 - 4; px += 1) if (!open(px)) x.fillRect(px, by, 1, 1);
+        }
+      }
       // speakers high on the side walls
       x.fillStyle = '#121216';
       for (let d = 30; d < r.depth - 20; d += 38) { const sy = r.top ? r.y0 + d : r.y1 - d; x.fillRect(r.x0 + 1, sy - 4, 3, 8); x.fillRect(r.x1 - 4, sy - 4, 3, 8); }
@@ -173,16 +250,7 @@ export class Renderer {
       // screen
       x.fillStyle = '#c9d6e8';
       x.fillRect(r.x0 + 24, screenY - 2, r.x1 - r.x0 - 48, 4);
-      // big room number, like the Devoxx plan
-      x.save();
-      x.fillStyle = 'rgba(255,255,255,0.16)';
-      x.font = '800 64px "Segoe UI", system-ui, sans-serif';
-      x.textAlign = 'center'; x.textBaseline = 'middle';
-      x.fillText(r.label, (r.x0 + r.x1) / 2, r.top ? r.y0 + r.depth * 0.45 : r.y1 - r.depth * 0.45);
-      // the capacity printed on the Kinepolis plan ("ZAAL 8 · 746 seats")
-      x.font = '700 12px system-ui'; x.fillStyle = 'rgba(255,255,255,0.3)';
-      x.fillText(`${SEATS[r.n]} seats`, (r.x0 + r.x1) / 2, (r.top ? r.y0 + r.depth * 0.45 : r.y1 - r.depth * 0.45) + 38);
-      x.restore();
+      // (the big room number and its capacity are drawn over everything, each frame: see drawRoomNumbers)
     }
 
     // the Kinepolis rooms Devoxx doesn't use: dark and closed, numbered like the Kinepolis plan
@@ -212,10 +280,11 @@ export class Renderer {
       });
       if (!edge) continue;
       const corridorWall = cx * CELL >= 110 && cx * CELL < 1300 && (cy * CELL === 320 || cy * CELL === 500);
-      const roomWall = !corridorWall && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ox, oy]) => roomAt((cx + ox) * CELL + 5, (cy + oy) * CELL + 5)); // the Kinepolis red
-      const inHall = (px, py) => py >= GROUND + 60 && py < GROUND + 660 && px >= 490 && px < 1480, [wx, wy] = [cx * CELL + 5, cy * CELL + 5];
-      const hallWall = !corridorWall && !roomWall && !(inHall(wx, wy) && wy < GROUND + 590) && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ox, oy]) => inHall((cx + ox) * CELL + 5, (cy + oy) * CELL + 5)); // its white walls (not its booths)
-      x.fillStyle = corridorWall ? '#5a1116' : roomWall ? '#a8231d' : hallWall ? '#b9b3a9' : '#343944';
+      const wallRoom = corridorWall ? null : [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([ox, oy]) => roomIn((cx + ox) * CELL + 5, (cy + oy) * CELL + 5)).find(Boolean);
+      const roomWall = !!wallRoom; // the Kinepolis red (or a room's own colour, ROOM_LOOK)
+      const inHall = (px, py) => py >= GROUND + 60 && py < GROUND + 1000 && px >= 490 && px < 1500, [wx, wy] = [cx * CELL + 5, cy * CELL + 5];
+      const hallWall = !corridorWall && !roomWall && !(inHall(wx, wy) && wy < GROUND + 870) && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ox, oy]) => inHall((cx + ox) * CELL + 5, (cy + oy) * CELL + 5)); // its white walls (not its booths)
+      x.fillStyle = corridorWall ? '#5a1116' : roomWall ? look(wallRoom).walls || '#a8231d' : hallWall ? '#b9b3a9' : '#343944';
       x.fillRect(cx * CELL, cy * CELL, CELL, CELL);
       x.fillStyle = 'rgba(255,255,255,0.06)';
       x.fillRect(cx * CELL, cy * CELL, CELL, 2);
@@ -248,13 +317,13 @@ export class Renderer {
       x.restore(); }
 
     // grand staircase down to the exhibition hall
-    const [sx, sy, sw, sh] = stairs;
+    const [sx, sy, sw, sh] = stairsWide;
     const sg = x.createLinearGradient(sx, 0, sx + sw, 0);
     sg.addColorStop(0, '#0b0c10'); sg.addColorStop(1, '#2a2c33');
     x.fillStyle = sg; x.fillRect(sx, sy, sw, sh);
     for (let px = sx; px < sx + sw; px += 5) { x.fillStyle = 'rgba(255,220,160,0.18)'; x.fillRect(px, sy, 1, sh); }
     x.save();
-    x.translate(88, 415); x.rotate(-Math.PI / 2);
+    x.translate(sx + sw / 2 - 2, sy + sh / 2); x.rotate(-Math.PI / 2);
     x.fillStyle = 'rgba(255,255,255,0.55)'; x.font = '600 11px system-ui'; x.textAlign = 'center';
     x.fillText('▼ STAIRS · GROUND FLOOR', 0, 4);
     x.restore();
@@ -286,34 +355,33 @@ export class Renderer {
     x.fillStyle = '#f3e6d4'; x.font = '700 12px system-ui'; x.textAlign = 'center'; x.fillText('☕ COFFEE', cx0 + cw / 2, cy0 + ch / 2 + 7);
     for (let i = 0; i < 5; i++) { x.fillStyle = '#eee'; x.beginPath(); x.arc(cx0 + 13 + i * 16, cy0 + 11, 2.2, 0, 7); x.fill(); }
 
-    // the foyer's pillars: dark, each under a white fabric sail stretched up to the ceiling (seen from above: a four-pointed star)
-    for (const [px, py, pw, ph] of corridorPillars) {
-      const cx = px + pw / 2, cy = py + ph / 2, R = 30, k = 7;
-      x.beginPath(); x.moveTo(cx - R, cy);
-      x.quadraticCurveTo(cx - k, cy - k, cx, cy - R); x.quadraticCurveTo(cx + k, cy - k, cx + R, cy);
-      x.quadraticCurveTo(cx + k, cy + k, cx, cy + R); x.quadraticCurveTo(cx - k, cy + k, cx - R, cy); x.closePath();
-      x.fillStyle = 'rgba(236,238,244,0.16)'; x.fill();
-      x.strokeStyle = 'rgba(255,255,255,0.28)'; x.lineWidth = 1; x.stroke();
-      x.strokeStyle = 'rgba(255,255,255,0.12)'; x.beginPath(); x.moveTo(cx - R * 0.6, cy); x.lineTo(cx + R * 0.6, cy); x.moveTo(cx, cy - R * 0.6); x.lineTo(cx, cy + R * 0.6); x.stroke();
-      x.fillStyle = 'rgba(0,0,0,0.45)'; x.fillRect(px, py + 2, pw + 2, ph + 2);
-      x.fillStyle = '#141925'; x.fillRect(px - 1, py - 1, pw + 2, ph + 2);
-      x.fillStyle = '#2b3446'; x.fillRect(px - 1, py - 1, pw + 2, 2);
+    // the foyer's pillars, two per row with a wide lane between them: plain black squares (the white fabric sails above
+    // them are up at the ceiling: not drawn, they hid the crowd)
+    x.fillStyle = '#000';
+    for (const [px, py, pw, ph] of corridorPillars) x.fillRect(px - 1, py - 1, pw + 2, ph + 2);
+    // the café corner: round tables, orange chairs around them
+    for (const [tx, ty] of cafeTables) {
+      for (const an of [0.3, 1.9, 3.5, 5.0]) {
+        const sx = tx + Math.cos(an) * 10, sy = ty + Math.sin(an) * 8;
+        x.fillStyle = 'rgba(0,0,0,0.35)'; x.beginPath(); x.roundRect(sx - 3, sy - 2, 7, 7, 2); x.fill();
+        x.fillStyle = '#d98a3a'; x.beginPath(); x.roundRect(sx - 3.5, sy - 3.5, 7, 7, 2); x.fill();
+      }
+      x.fillStyle = 'rgba(0,0,0,0.4)'; x.beginPath(); x.arc(tx + 1, ty + 2, 7, 0, 7); x.fill();
+      x.fillStyle = '#2a2622'; x.beginPath(); x.arc(tx, ty, 7, 0, 7); x.fill();
+      x.strokeStyle = 'rgba(255,230,190,0.35)'; x.lineWidth = 1; x.stroke();
     }
     // standing tables: black top, thin legs, a little plant in a yellow pot
-    for (const [tx, ty] of tables) {
-      const cx = tx + TABLE_W / 2, cy = ty + TABLE_H / 2;
-      x.fillStyle = 'rgba(0,0,0,0.45)'; x.fillRect(tx - 1, ty + 1, TABLE_W + 4, TABLE_H + 4);
-      x.fillStyle = '#131417'; x.fillRect(tx - 2, ty - 2, TABLE_W + 4, TABLE_H + 4);
-      x.strokeStyle = 'rgba(255,255,255,0.22)'; x.lineWidth = 1; x.strokeRect(tx - 1.5, ty - 1.5, TABLE_W + 3, TABLE_H + 3);
+    for (const [tx, ty, tw = TABLE_W] of tables) {
+      const cx = tx + tw / 2, cy = ty + TABLE_H / 2;
+      x.fillStyle = 'rgba(0,0,0,0.45)'; x.fillRect(tx - 1, ty + 1, tw + 4, TABLE_H + 4);
+      x.fillStyle = '#131417'; x.fillRect(tx - 2, ty - 2, tw + 4, TABLE_H + 4);
+      x.strokeStyle = 'rgba(255,255,255,0.22)'; x.lineWidth = 1; x.strokeRect(tx - 1.5, ty - 1.5, tw + 3, TABLE_H + 3);
       x.fillStyle = '#e0ad22'; x.beginPath(); x.arc(cx, cy, 3, 0, 7); x.fill();
       x.fillStyle = '#62b34f'; for (const [ox, oy] of [[-2.5, -2], [2.5, -2], [0, 2.5], [-2.5, 1.5], [2.5, 1.5], [0, -3]]) { x.beginPath(); x.arc(cx + ox, cy + oy, 1.8, 0, 7); x.fill(); }
     }
     // labels
     x.fillStyle = 'rgba(255,255,255,0.3)'; x.font = '600 10px system-ui'; x.textAlign = 'left';
-    x.fillText('SERVICE CORRIDOR · STAFF ONLY', 120, 59);
-    x.fillText('SERVICE CORRIDOR · STAFF ONLY', 120, 789);
     x.save(); x.font = '600 9px system-ui'; x.fillStyle = 'rgba(255,255,255,0.18)'; x.textAlign = 'center';
-    for (const y of [200, 635]) { x.save(); x.translate(152, y); x.rotate(-Math.PI / 2); x.fillText('PROJECTION BOOTHS', 0, 3); x.restore(); }
     x.restore();
     x.font = '600 10px system-ui'; x.fillStyle = 'rgba(255,255,255,0.35)';
     x.fillText('KINEPOLIS ANTWERP · CINEMA LEVEL (1ST FLOOR)', 1312, 562);
@@ -329,15 +397,62 @@ export class Renderer {
     const F = GROUND;
     x.save(); x.textAlign = 'center'; x.textBaseline = 'middle';
     x.fillStyle = 'rgba(255,255,255,0.07)'; x.font = '900 34px "Segoe UI", system-ui, sans-serif';
-    x.fillText('EXHIBITION HALL', 1240, F + 578);
+    x.fillText('EXHIBITION HALL', 1150, F + 950); // on the night outside, under the hall
+    // the big grey words on the hall's white walls (the drone video), along its top wall
+    x.fillStyle = 'rgba(205,210,218,0.22)'; x.font = '800 30px "Segoe UI", system-ui, sans-serif';
+    [['exchange', 790], ['share', 960], ['celebrate', 1130]].forEach(([w, wx]) => x.fillText(w, wx, F + 32));
+    // the passage from the toilets' door (in the hall's top wall) to the toilet block in the corner
+    x.fillStyle = 'rgba(255,255,255,0.55)'; x.font = '800 9px system-ui'; x.fillText('🚻 TOILETS ▸', 1420, F + 33);
+    // the bike corner: fake grass, three exercise bikes
+    { const [kx, ky, kw, kh] = bikeCorner;
+      x.fillStyle = '#4c8a2f'; x.fillRect(kx, ky, kw, kh);
+      x.fillStyle = 'rgba(255,255,255,0.06)'; for (let k = 0; k < kw; k += 6) x.fillRect(kx + k, ky, 2, kh);
+      for (let k = 0; k < 3; k++) { const cx0 = kx + 28 + k * 47, cy0 = ky + kh / 2;
+        x.strokeStyle = '#1a1c20'; x.lineWidth = 2.5; x.beginPath(); x.arc(cx0 - 9, cy0, 7, 0, 7); x.stroke(); x.beginPath(); x.arc(cx0 + 9, cy0, 7, 0, 7); x.stroke();
+        x.strokeStyle = '#c8ccd2'; x.lineWidth = 2; x.beginPath(); x.moveTo(cx0 - 9, cy0); x.lineTo(cx0, cy0 - 4); x.lineTo(cx0 + 9, cy0); x.stroke(); }
+      x.fillStyle = 'rgba(255,255,255,0.7)'; x.font = '700 8px system-ui'; x.fillText('🚲 BIKE CHALLENGE', kx + kw / 2, ky - 7); }
     // sponsor booths
     const BOOTH = ['#3d5a80', '#8c2f39', '#4f6b3a', '#c9a227', '#5e3a6e', '#2d6f73'];
     booths.forEach((b, i) => {
       const [bx, by, bw, bh] = b.rect;
-      x.fillStyle = '#1b1d22'; x.fillRect(bx, by, bw, bh);
-      x.fillStyle = BOOTH[i % BOOTH.length]; x.fillRect(bx, by, bw, 12);
-      x.fillStyle = '#e8e6e1'; x.fillRect(bx + 10, by + bh - 16, bw - 20, 10); // the counter
-      x.fillStyle = 'rgba(255,255,255,0.75)'; x.font = '700 9px system-ui'; x.fillText(`BOOTH ${b.id}`, bx + bw / 2, by + bh / 2);
+      // as at Devoxx (the sponsors' photos): a patch of carpet, three printed roll-up banners side by side at the back, and a
+      // small black pop-up counter at the front, facing the aisle, with a laptop on it
+      const col = BOOTH[i % BOOTH.length], back = b.up ? by + bh - 9 : by + 3, front = b.up ? by + 6 : by + bh - 20;
+      if (b.side) { // against the left (or right) wall, facing into the hall: the banners against the wall, the counter in front
+        x.save(); if (b.side === 'left') { x.translate(bx * 2 + bw, 0); x.scale(-1, 1); } // the right wall's: mirrored
+        x.fillStyle = '#34363d'; x.fillRect(bx, by, bw, bh);
+        const ph = (bh - 12) / 3;
+        for (let k = 0; k < 3; k++) { const py = by + 6 + k * ph;
+          x.fillStyle = 'rgba(0,0,0,0.35)'; x.fillRect(bx + 5, py + 1, 6, ph - 2);
+          x.fillStyle = '#ece8e0'; x.fillRect(bx + 3, py + 1, 6, ph - 2); x.fillStyle = col; x.fillRect(bx + 6, py + 1, 3, ph - 2); }
+        x.fillStyle = '#0e0f12'; x.fillRect(bx + bw - 20, by + bh / 2 - 22, 14, 44);
+        x.fillStyle = col; x.fillRect(bx + bw - 9, by + bh / 2 - 22, 3, 44);
+        x.fillStyle = '#c9ced6'; x.fillRect(bx + bw - 17, by + bh / 2 - 6, 8, 12);
+        x.restore();
+        x.save(); if (b.side === 'left') { x.translate(bx * 2 + bw, 0); x.scale(-1, 1); }
+        x.strokeStyle = 'rgba(220,224,230,0.45)'; x.lineWidth = 0.8; x.beginPath(); // the truss, down its back
+        x.moveTo(bx - 1, by); x.lineTo(bx - 1, by + bh); x.moveTo(bx + 3, by); x.lineTo(bx + 3, by + bh);
+        for (let k = 0; k < bh; k += 8) { x.moveTo(bx - 1, by + k); x.lineTo(bx + 3, by + k + 4); x.lineTo(bx - 1, by + k + 8); }
+        x.stroke(); x.restore(); return;
+      }
+      x.fillStyle = '#34363d'; x.fillRect(bx, by, bw, bh);
+      const pw = (bw - 16) / 3;
+      for (let k = 0; k < 3; k++) {
+        const px = bx + 8 + k * pw;
+        x.fillStyle = 'rgba(0,0,0,0.35)'; x.fillRect(px + 1, back + (b.up ? -2 : 2), pw - 2, 6);
+        x.fillStyle = '#ece8e0'; x.fillRect(px + 1, back, pw - 2, 6); // the banner, seen edge-on from above: its printed face
+        x.fillStyle = col; x.fillRect(px + 1, b.up ? back : back + 3, pw - 2, 3);
+      }
+      x.fillStyle = '#0e0f12'; x.fillRect(bx + bw / 2 - 24, front, 48, 14); // the counter
+      x.fillStyle = col; x.fillRect(bx + bw / 2 - 24, b.up ? front : front + 11, 48, 3);
+      x.fillStyle = '#c9ced6'; x.fillRect(bx + bw / 2 - 7, front + 3, 14, 8); // a laptop
+      // (no name on it: Jessica)
+      // the lighting truss over it: a light lattice along its back
+      const ty = b.up ? by + bh - 3 : by + 1;
+      x.strokeStyle = 'rgba(220,224,230,0.45)'; x.lineWidth = 0.8; x.beginPath();
+      x.moveTo(bx, ty - 2); x.lineTo(bx + bw, ty - 2); x.moveTo(bx, ty + 2); x.lineTo(bx + bw, ty + 2);
+      for (let k = 0; k < bw; k += 8) { x.moveTo(bx + k, ty - 2); x.lineTo(bx + k + 4, ty + 2); x.lineTo(bx + k + 8, ty - 2); }
+      x.stroke();
     });
     // the flights: you walk every step, from the bottom (light) to the top (dark), between two railings. The reception desk is
     // under the wide stairs up from reception, as at Kinepolis: it shows through them, and comes out past them on the hall side
@@ -357,6 +472,10 @@ export class Renderer {
     };
     drawFlight(receptionFlight, false, 0.78); // facing the main entrance
     hallFlightDefs.forEach(f => drawFlight(f, true)); // stepped on from the right
+    hallFlightDefs.forEach(({ lane: [, ly, , lh] }) => { // their double doors, above and below the landing: open, two leaves each
+      x.strokeStyle = 'rgba(180,230,170,0.55)'; x.lineWidth = 1;
+      for (const [dy, dir] of [[ly - 5, -1], [ly + lh + 5, 1]]) for (const [hx, s] of [[1340, 1], [1380, -1]]) { x.beginPath(); x.moveTo(hx, dy); x.lineTo(hx + s * 14, dy + dir * 12); x.stroke(); }
+    });
     const [lx0, , lw0] = receptionFlight.lane, vx0 = lx0 + lw0 + 10; // the desk's part out past the stairs, where its name shows
     x.fillStyle = 'rgba(58,61,70,0.95)'; x.font = '800 8px system-ui'; x.fillText('RECEPTION', (vx0 + rx + rw) / 2, ry + rh / 2 + 3);
     x.fillStyle = 'rgba(255,255,255,0.6)'; x.font = '700 9px system-ui';
@@ -374,20 +493,31 @@ export class Renderer {
     x.fillStyle = 'rgba(255,60,50,0.35)'; x.fillRect(px0 - 2, py0 - 4, pw + 4, 4);
     x.fillStyle = '#efece6'; x.fillRect(px0, py0, pw, ph);
     x.fillStyle = '#d6d1c8'; x.fillRect(px0, py0, pw, 5);
-    x.fillStyle = '#3a3d46'; x.font = '800 9px system-ui'; x.fillText('DEVOXX POLO', px0 + pw / 2, py0 + ph / 2); x.fillText('PICKUP', px0 + pw / 2, py0 + ph / 2 + 11);
-    // the hall's white pillars, square (about 1 m, a little wider than their nav cell), with their shadow
-    for (const [cx0, cy0, cw0, ch0] of hallPillars) {
-      const qx = cx0 - 2, qy = cy0 - 2, qw = cw0 + 4, qh = ch0 + 4;
-      x.fillStyle = 'rgba(0,0,0,0.35)'; x.fillRect(qx + 2, qy + 3, qw, qh);
-      x.fillStyle = '#e9e5de'; x.fillRect(qx, qy, qw, qh);
-      x.fillStyle = '#c9c3b8'; x.fillRect(qx, qy + qh - 3, qw, 3);
-    }
+    x.fillStyle = '#3a3d46'; x.font = '800 9px system-ui'; x.fillText('DEVOXX POLO PICKUP', px0 + pw / 2, py0 + ph / 2 + 2);
+    // the hall's white pillars, square (about 1 m, a little wider than their nav cell)
+    x.fillStyle = '#e9e5de'; // plain white squares, like the black ones upstairs
+    for (const [cx0, cy0, cw0, ch0] of hallPillars) x.fillRect(cx0 - 2, cy0 - 2, cw0 + 4, ch0 + 4);
     // BOF rooms
     for (const b of bofRooms) {
       const [bx, by, bw, bh] = b.rect;
-      for (let i = 0; i < 5; i++) { x.fillStyle = i % 2 ? '#262931' : '#2d3039'; x.fillRect(bx + 15, by + 50 + i * 24, bw - 30, 10); }
+      // rows of tables facing the screen, with a centre aisle down the middle (and chairs behind each table)
+      const half = (bw - 24 - 18) / 2;
+      for (let ty = by + 44; ty < by + bh - 40; ty += 22) for (const tx of [bx + 12, bx + 12 + half + 18]) {
+        x.fillStyle = '#3a3e47'; x.fillRect(tx, ty, half, 7);
+        x.fillStyle = '#23262d'; for (let cx2 = tx + 3; cx2 < tx + half - 6; cx2 += 11) x.fillRect(cx2, ty - 6, 7, 5);
+      }
       x.fillStyle = '#c9d6e8'; x.fillRect(bx + 20, by + bh - 10, bw - 40, 4); // the screen, at the far end from the door
       x.fillStyle = 'rgba(255,255,255,0.35)'; x.font = '800 12px system-ui'; x.fillText(`BOF ${b.n}`, bx + bw / 2, by + 24);
+    }
+    { // their front wall onto reception, with a double door each in the middle, either side of the partition
+      const [x0, wy] = [bofRooms[0].rect[0], bofRooms[0].rect[1] - 10], x1 = bofRooms[1].rect[0] + bofRooms[1].rect[2];
+      x.fillStyle = '#6b7080'; x.fillRect(x0 - 5, wy + 2, x1 - x0 + 10, 7);
+      for (const b of bofRooms) {
+        x.fillStyle = '#1d1f25'; x.fillRect(b.door, wy, 30, 10); // the opening
+        x.strokeStyle = '#9aa0ad'; x.lineWidth = 1.2; // two door leaves, open inwards
+        x.beginPath(); x.moveTo(b.door + 1, wy + 9); x.lineTo(b.door + 1, wy + 22); x.moveTo(b.door + 29, wy + 9); x.lineTo(b.door + 29, wy + 22); x.stroke();
+        x.beginPath(); x.arc(b.door + 1, wy + 9, 13, 0, Math.PI / 2); x.moveTo(b.door + 29 - 13, wy + 9); x.arc(b.door + 29, wy + 9, 13, Math.PI, Math.PI / 2, true); x.globalAlpha = 0.35; x.stroke(); x.globalAlpha = 1;
+      }
     }
     // the toilets: white tiles, a row of cubicles, the sign
     for (const tl of toilets) {
@@ -432,7 +562,7 @@ export class Renderer {
     x.save(); x.translate(ex + 20, ey + eh / 2); x.rotate(-Math.PI / 2);
     x.fillStyle = 'rgba(255,255,255,0.6)'; x.font = '700 10px system-ui'; x.fillText('MAIN ENTRANCE', 0, 0); x.restore();
     x.fillStyle = 'rgba(255,255,255,0.3)'; x.font = '700 16px system-ui'; x.textAlign = 'left';
-    x.fillText('GROUND FLOOR · RECEPTION', 200, F + 196);
+    x.fillText('GROUND FLOOR · RECEPTION', 215, F + 330);
     x.restore();
   }
 
@@ -450,8 +580,8 @@ export class Renderer {
     for (let px = 250; px < 1300; px += 90) hole(px, 415, 95, 0.85);
     hole(1410, 345, 110, 0.65); // the charging corner's soft light
     hole(1350, 505, 90, 0.6); // the coffee machine
-    for (let px = 540; px < 1500; px += 120) for (let py = GROUND + 100; py < GROUND + 680; py += 120) hole(px, py, 130, 0.9); // exhibition hall
-    for (let py = GROUND + 180; py < GROUND + 580; py += 90) { hole(60, py, 130, 0.9); hole(300, py, 110, 0.7); } // daylight at the entrance
+    for (let px = 540; px < 1500; px += 120) for (let py = GROUND + 100; py < GROUND + 1000; py += 120) hole(px, py, 130, 0.9); // exhibition hall
+    for (let py = GROUND + 320; py < GROUND + 880; py += 90) { hole(80, py, 130, 0.9); hole(320, py, 110, 0.7); } // daylight at the entrance
     for (const b of bofRooms) hole(b.rect[0] + b.rect[2] / 2, b.rect[1] + 90, 110, 0.6);
     hole(140, 415, 110, 0.7);
     hole(1190, 415, 110, 0.7); // the far end of the corridor, by the coffee bar
@@ -459,7 +589,6 @@ export class Renderer {
       hole((r.x0 + r.x1) / 2, r.top ? r.y0 + 10 : r.y1 - 10, 110, 0.55);
       r.doors.forEach(d => hole(d.x + d.w / 2, d.y + 5, 30, 0.6));
     }
-    for (let px = 90; px < 1080; px += 120) { hole(px, 55, 40, 0.5); hole(px, 785, 40, 0.5); }
     this.light = c;
     this.buildGlow();
   }
@@ -480,10 +609,11 @@ export class Renderer {
     for (const r of rooms) {
       // red LED dots on every step of every aisle (not in the projection room, at the back)
       for (let i = 0; i <= rowsOf(r); i++) {
-        const ry = r.top ? r.y0 + 33 + i * 14 : r.y1 - 33 - i * 14;
+        const ry = r.top ? r.y0 + 33 + i * r.pitch : r.y1 - 33 - i * r.pitch;
         if (Math.abs(ry - (r.top ? r.y1 : r.y0)) < BOOTH_D + 2) continue;
-        for (const ax of aislesOf(r)) for (let k = 0; k < 3; k++) red(ax + 2 + k * 4, ry);
+        for (const ax of aislesAt(r, Math.min(i, rowsOf(r) - 1))) for (let k = 0; k < 3; k++) red(ax + 2 + k * 4, ry);
       }
+      if (look(r).crossLeds) for (let px = r.x0 + 6; px < r.x1 - 4; px += 5) red(px, r.top ? r.crossY + 5 : r.crossY - 6); // Zaal 3 and 4: a strip of LEDs along the cross aisle's railing, to the foyer door
       for (const d of r.doors) {
         // a dotted red line across each doorway, and the room screen beside it
         for (let px = d.x + 3; px < d.x + d.w; px += 4) red(px, r.top ? d.y - 3 : d.y + d.h + 3);
@@ -542,8 +672,13 @@ export class Renderer {
     }
     // the camera: the whole floor, or (zoomed, on small screens) a window that follows your robot
     const VW = this.viewW || W, VH = this.viewH || FLOOR_H;
-    let cx = W / 2, cy = oy + FLOOR_H / 2;
-    if (this.zoomed) {
+    const FH = floorH(floor); // downstairs the floor is taller than the screen: the view scrolls with your robot
+    // on a big screen (not zoomed in), the taller ground floor is shown whole, a little smaller (k < 1): no scrolling
+    // (a little bigger than the whole floor, Jessica: the bottom of the BOF rooms and the toilets may go out of sight)
+    const fit = !this.zoomed && FH > VH, k = fit ? Math.min(1, VH / (GROUND_SHOWN[1] - GROUND_SHOWN[0])) : 1;
+    this.k = k; this.visW = VW / k; this.visH = VH / k; // the visible part of the world, in world units
+    let cx = W / 2, cy = oy + (fit ? GROUND_SHOWN[0] + VH / k / 2 : Math.min(FH, VH) / 2);
+    if (!fit && (this.zoomed || FH > VH)) {
       const me = game.robots[game.follow || game.active];
       let focus = me && floorOf(me.y) === floor ? me : null;
       if (!focus) { // watching: the robot that needs it most, but don't hop between robots for small differences
@@ -555,21 +690,24 @@ export class Renderer {
       const tx = focus ? focus.x : cx, ty = focus ? focus.y : cy;
       if (this.camX === undefined || this.camFloor !== floor) { this.camX = tx; this.camY = ty; this.camFloor = floor; }
       this.camX += (tx - this.camX) * 0.12; this.camY += (ty - this.camY) * 0.12;
-      cx = Math.max(VW / 2, Math.min(W - VW / 2, this.camX)); cy = Math.max(oy + VH / 2, Math.min(oy + FLOOR_H - VH / 2, this.camY));
+      cx = Math.max(VW / 2, Math.min(W - VW / 2, this.camX)); cy = Math.max(oy + VH / 2, Math.min(oy + FH - VH / 2, this.camY));
     }
-    this.vx0 = cx - VW / 2; this.vy0 = cy - VH / 2; // the visible part of the world, for the edge markers
+    this.vx0 = cx - this.visW / 2; this.vy0 = cy - this.visH / 2; // the visible part of the world, for the edge markers
+    if (fit) { x.fillStyle = '#0a0c10'; x.fillRect(0, 0, VW, VH); x.scale(k, k); } // the night outside, on both sides
     const cam = window.__cam; // debug zoom: window.__cam = { x, y, z }
     if (cam) { x.fillStyle = '#000'; x.fillRect(0, 0, VW, VH); x.translate(VW / 2, VH / 2); x.scale(cam.z, cam.z); x.translate(-cam.x, -cam.y); }
     else x.translate(-this.vx0, -this.vy0);
     x.imageSmoothingEnabled = true;
-    x.drawImage(this.staticLayer, 0, oy * SS, W * SS, FLOOR_H * SS, 0, oy, W, FLOOR_H);
+    x.drawImage(this.staticLayer, 0, oy * SS, W * SS, FH * SS, 0, oy, W, FH);
     if (!floor && game.boothsEmpty) for (const b of booths) { // no exhibitors: not set up yet (Monday morning), or gone (Thursday afternoon, Friday)
       const [bx, by, bw, bh] = b.rect;
       x.fillStyle = '#23252b'; x.fillRect(bx, by, bw, bh);
       x.strokeStyle = 'rgba(255,255,255,0.18)'; x.setLineDash([4, 4]); x.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1); x.setLineDash([]);
       x.fillStyle = '#3a3226'; x.fillRect(bx + 12, by + bh - 22, 22, 14); x.fillRect(bx + 38, by + bh - 18, 16, 10); // a couple of boxes
       x.fillStyle = 'rgba(255,255,255,0.35)'; x.font = '700 9px system-ui'; x.textAlign = 'center';
-      x.fillText(`BOOTH ${b.id} · ${game.day.boothsFrom ? `OPENS AT ${game.day.boothsFrom}` : 'PACKED UP'}`, bx + bw / 2, by + bh / 2 - 4);
+      if (bw < 100) continue; // a narrow one: nothing written (no booth names: Jessica)
+      x.font = '600 8px system-ui';
+      x.fillText(game.day.boothsFrom ? `OPENS AT ${game.day.boothsFrom}` : game.day.boothsSoon ? `OPENS ON ${game.day.boothsSoon}` : 'PACKED UP', bx + bw / 2, by + bh / 2 - 4);
     }
 
     if (floor) this.houseLights(x, game, t); // the rooms: dark during a talk (people, robots and signs stay as they are)
@@ -626,11 +764,11 @@ export class Renderer {
       } else drawRobot(x, rb, t, { active: rb.kind === game.active });
     }
 
-    x.drawImage(this.light, 0, oy, W, FLOOR_H, 0, oy, W, FLOOR_H);
+    x.drawImage(this.light, 0, oy, W, FH, 0, oy, W, FH);
 
     // after the lightmap: things that emit light
     x.globalCompositeOperation = 'lighter';
-    x.drawImage(this.glow, 0, oy, W, FLOOR_H, 0, oy, W, FLOOR_H);
+    x.drawImage(this.glow, 0, oy, W, FH, 0, oy, W, FH);
     if (floor) for (const r of rooms) { // the house lights, in the rooms between talks
       const L = this.lit?.[r.n] ?? 1, [rx, ry, rw, rh] = [r.x0 - 5, r.y0, r.x1 - r.x0 + 10, r.y1 - r.y0];
       if (L > 0.02) { x.globalAlpha = L; x.drawImage(this.houseGlow, rx, ry, rw, rh, rx, ry, rw, rh); x.globalAlpha = 1; }
@@ -660,6 +798,7 @@ export class Renderer {
     }
     x.globalCompositeOperation = 'source-over';
 
+    if (floor) this.drawRoomNumbers(x);
     this.drawTitles(x, game);
     this.drawGuide(x, game, t);
     this.drawBubbles(x, game, t);
@@ -670,6 +809,7 @@ export class Renderer {
     x.textAlign = 'center';
     x.font = '800 13.5px system-ui';
     for (const f of game.floaters) {
+      if (f.bubble) { this.drawSpeech(x, f, t); continue; }
       const a = Math.min(1, (f.life - f.t) / 0.5); // fully readable, then a short fade at the end
       const tw = x.measureText(f.text).width;
       const fy = f.y - Math.min(f.t * 14, 24); // drifts up a little, then holds still to be read
@@ -749,9 +889,9 @@ export class Renderer {
     const inside = {};
     for (const p of game.pool) inside[p.room] = (inside[p.room] || 0) + 1;
     for (const r of rooms) {
-      // each attendee sitting in a talk stands for about 70 real ones: the people on screen are a sample of the ~3,500 at Devoxx
+      // each attendee sitting in a talk stands for about 60 real ones: the people on screen are a sample of the ~3,000 at Devoxx (Jessica)
       // (about 30 each), and in a 3-minute day many of them are still on their way, so the rooms are drawn as full as they would be
-      const spots = this.seatSpots[r.n], n = Math.min(spots.length, Math.round((inside[r.n] || 0) * 70 * spots.length / SEATS[r.n]));
+      const spots = this.seatSpots[r.n], n = Math.min(spots.length, Math.round((inside[r.n] || 0) * 60 * spots.length / SEATS[r.n]));
       // seen from above, like the people walking: shoulders in their clothes and a head (every skin tone), turned to the screen,
       // with a tiny fidget. Drawn in batches: the shadows in one path, then one path per colour
       const fwd = r.top ? -1 : 1; // towards the screen
@@ -784,6 +924,20 @@ export class Renderer {
 
   // the talks' titles, on the rooms' screens, like slides: drawn after the lights, so that they stay crisp and white. The first
   // four words (fewer in a small room), or the whole title while the robot you steer is in the room
+  // the big room numbers, like the Devoxx plan, and the capacity printed on the Kinepolis plan ("746 seats"): over the crowd
+  // and the dimmed house lights, so they read during a talk too
+  drawRoomNumbers(x) {
+    x.save(); x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
+    for (const r of rooms) {
+      const cx = (r.x0 + r.x1) / 2, cy = r.top ? r.y0 + r.depth * 0.45 : r.y1 - r.depth * 0.45;
+      x.font = '800 64px "Segoe UI", system-ui, sans-serif'; x.strokeStyle = 'rgba(8,9,12,0.6)'; x.lineWidth = 6;
+      x.strokeText(r.label, cx, cy); x.fillStyle = 'rgba(255,255,255,0.62)'; x.fillText(r.label, cx, cy);
+      x.font = '700 12px system-ui'; x.lineWidth = 3; x.strokeText(`${SEATS[r.n]} seats`, cx, cy + 38);
+      x.fillStyle = 'rgba(255,255,255,0.7)'; x.fillText(`${SEATS[r.n]} seats`, cx, cy + 38);
+    }
+    x.restore();
+  }
+
   drawTitles(x, game) {
     if (!game.talkIn) return;
     const me = game.robots[game.active], inside = (x0, y0, x1, y1) => me && me.x > x0 && me.x < x1 && me.y > y0 && me.y < y1;
@@ -865,18 +1019,6 @@ export class Renderer {
       x.fillStyle = Math.sin(t * 8) > 0 ? '#ff5a4a' : '#7a2a24'; x.font = '800 12px system-ui'; x.textAlign = 'center';
       x.fillText(INCIDENTS[p.what].tag, s.tag[0], s.tag[1]);
       this.drawPanel(x, game.panelOf(n), p, t);
-    }
-    // hold-E hint with high contrast backdrop
-    const h = game.holdTarget;
-    if (h) {
-      const at = h.rb || game.panelOf(h.room);
-      const txt = h.kind === 'reassure' ? `hold E: stay with ${h.rb.name}` : `hold E: ${game.fixLabel(h.room)}`;
-      x.font = '800 12.5px system-ui'; x.textAlign = 'center';
-      const tw = x.measureText(txt).width;
-      const hy = at.y - (h.kind === 'reassure' ? 32 : 26);
-      x.fillStyle = 'rgba(8,10,16,0.92)'; x.fillRect(at.x - tw / 2 - 6, hy - 13, tw + 12, 18);
-      x.strokeStyle = '#7bdc6b'; x.lineWidth = 1.5; x.strokeRect(at.x - tw / 2 - 6, hy - 13, tw + 12, 18);
-      x.fillStyle = '#d4ffcc'; x.fillText(txt, at.x, hy);
     }
   }
 
@@ -978,6 +1120,38 @@ export class Renderer {
     }
   }
 
+  // someone talking (a robot or an attendee): a speech bubble that pops up, "types" for a moment (three bouncing dots), then shows its words with a
+  // light shimmer running across them, like a chat assistant's "working…" bubble
+  drawSpeech(x, f, t) {
+    const a = Math.min(1, (f.life - f.t) / 0.5), pop = Math.min(1, f.t / 0.22), s = 1 + 2.70158 * (pop - 1) ** 3 + 1.70158 * (pop - 1) ** 2; // pops up, a little past its size and back
+    const typing = f.t < BUBBLE_TYPING, by = f.y - 4;
+    x.save(); x.globalAlpha = a; x.translate(f.x, by); x.scale(s, s);
+    x.font = '800 13.5px system-ui';
+    const w = typing ? 40 : x.measureText(f.text).width + 18, h = 22;
+    // robots: a dark bubble in the robot's own colour (its ring on the map); people: a white bubble with dark words
+    const rc = f.robot ? (COLORS[f.robot] || '#b8c0cc') : null;
+    const bg = rc ? 'rgba(14,16,24,0.94)' : 'rgba(248,246,240,0.97)', ink = rc || '#1b1e27', edge = rc || 'rgba(14,16,24,0.55)';
+    x.fillStyle = bg; x.strokeStyle = edge; x.lineWidth = rc ? 2 : 1;
+    x.beginPath(); x.roundRect(-w / 2, -h, w, h, 11); x.moveTo(-5, 0); x.lineTo(0, 7); x.lineTo(5, 0); x.fill(); x.stroke();
+    x.fillStyle = bg; x.fillRect(-4.4, -2, 8.8, 2.9); // the tail joins the bubble without a line across it
+    if (rc) { x.fillStyle = rc; x.globalAlpha = a * 0.16; x.beginPath(); x.roundRect(-w / 2, -h, w, h, 11); x.fill(); x.globalAlpha = a; } // a tint of its colour
+    const shine = rc ? '#ffffff' : '#8a93a6';
+    if (typing) for (let i = 0; i < 3; i++) { // the dots bounce one after the other
+      x.fillStyle = ink; x.globalAlpha = a * (0.55 + 0.45 * Math.abs(Math.sin(t * 7 - i * 0.7)));
+      x.beginPath(); x.arc(-10 + i * 10, -h / 2 - Math.abs(Math.sin(t * 7 - i * 0.7)) * 3, 2.6, 0, 7); x.fill();
+    } else {
+      const k = (f.t - BUBBLE_TYPING) / 0.9, tw = w - 18; // the shimmer, once, as the words appear
+      if (k < 1) {
+        const g = x.createLinearGradient(-tw / 2, 0, tw / 2, 0), p = -0.2 + k * 1.4;
+        g.addColorStop(0, ink); g.addColorStop(Math.min(1, Math.max(0, p - 0.15)), ink);
+        g.addColorStop(Math.min(1, Math.max(0, p)), shine); g.addColorStop(Math.min(1, Math.max(0, p + 0.15)), ink); g.addColorStop(1, ink);
+        x.fillStyle = g;
+      } else x.fillStyle = ink;
+      x.textAlign = 'center'; x.fillText(f.text, 0, -h / 2 + 5);
+    }
+    x.restore();
+  }
+
   drawBubbles(x, game, t) {
     x.textAlign = 'center';
     for (const a of game.crowd.list) {
@@ -1048,13 +1222,13 @@ export class Renderer {
     if (!this.thumbs) this.thumbs = [GROUND, 0].map(oy => { // [ground, 1st floor]
       const c = document.createElement('canvas'); c.width = 400; c.height = 210;
       const cx = c.getContext('2d'); cx.filter = 'brightness(1.9) saturate(1.2)'; // the map is lit, the building is dim
-      cx.drawImage(this.staticLayer, 0, oy * SS, W * SS, FLOOR_H * SS, 0, 0, 400, 210);
+      cx.drawImage(this.staticLayer, 0, oy * SS, W * SS, floorH(oy ? 0 : 1) * SS, 0, 0, 400, 210);
       return c;
     });
     const x = cv.getContext('2d'), view = game.viewFloor();
     const sx = 140 / W, sy = 44 / FLOOR_H, kx = 26 / FLOOR_H, X0 = 24, TOPS = [80, 20]; // [ground, 1st] top edges
     const tf = f => [sx, 0, -kx, sy, X0 + FLOOR_H * kx, TOPS[f]];
-    const P = (wx, wy) => { const f = floorOf(wy); const [a, , c, d, e, g] = tf(f); const v = wy - (f ? 0 : GROUND); return [a * wx + c * v + e, d * v + g]; };
+    const P = (wx, wy) => { const f = floorOf(wy); const [a, , c, d, e, g] = tf(f); const v = (wy - (f ? 0 : GROUND)) * FLOOR_H / floorH(f); return [a * wx + c * v + e, d * v + g]; }; // each slab squeezed to the same depth
     x.setTransform(dpr, 0, 0, dpr, 0, 0);
     x.clearRect(0, 0, CW, CH);
     x.fillStyle = 'rgba(0,0,0,0.6)'; x.beginPath(); x.roundRect(0, 0, CW, CH, 10); x.fill();
@@ -1106,7 +1280,7 @@ export class Renderer {
 
   drawOffscreenIndicators(x, game, t) {
     const currentFloor = game.viewFloor();
-    const vx0 = this.vx0 ?? 0, vy0 = this.vy0 ?? (currentFloor ? 0 : GROUND), VW = this.viewW || W, VH = this.viewH || FLOOR_H;
+    const vx0 = this.vx0 ?? 0, vy0 = this.vy0 ?? (currentFloor ? 0 : GROUND), VW = this.visW || this.viewW || W, VH = this.visH || this.viewH || FLOOR_H;
     const margin = 24;
 
     const targets = [];
@@ -1159,14 +1333,14 @@ export class Renderer {
 
 function floorColor(px, py, cx, cy) {
   const n = ((cx * 928371 + cy * 12377) % 7) / 7;
-  if (py >= GROUND) { // ground floor: beige-brown carpet in the hall (the Kinepolis photos), pale stone at reception, dark carpet in the BOF rooms
-    if (py >= GROUND + 590 && px < 490) return `rgb(${22 + n * 3},${24 + n * 3},${30 + n * 3})`;
+  if (py >= GROUND) { // ground floor: dark grey carpet in the hall, pale stone at reception, dark carpet in the BOF rooms
+    if (py >= GROUND + 890 && px < 380) return `rgb(${22 + n * 3},${24 + n * 3},${30 + n * 3})`;
     if (px < 490) return `rgb(${56 + n * 5},${55 + n * 5},${52 + n * 5})`;
-    return `rgb(${74 + n * 5},${62 + n * 5},${52 + n * 4})`;
+    return `rgb(${40 + n * 4},${41 + n * 4},${45 + n * 4})`; // the hall: dark grey carpet (the drone video)
   }
   if (px >= 1300) return `rgb(${26 + n * 3},${30 + n * 3},${38 + n * 3})`; // the lounge: soft carpet
-  if (py < 80 || py >= 760 || (px < 110 && (py < 320 || py >= 510))) return `rgb(${44 + n * 5},${43 + n * 5},${41 + n * 5})`; // service concrete
+  if (px < 100 && (py < 320 || py >= 510)) return `rgb(${44 + n * 5},${43 + n * 5},${41 + n * 5})`; // service concrete
   if (py >= 330 && py < 500) return `rgb(${27 + n * 3},${34 + n * 3},${60 + n * 5})`;    // corridor: navy carpet
-  return `rgb(${24 + n * 2},${24 + n * 2},${31 + n * 2})`;                                // auditorium
+  return ROOM_CARPET;                                                                      // auditorium: one plain carpet, aisles included
 }
 
