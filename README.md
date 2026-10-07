@@ -30,7 +30,7 @@ Voxxy, Droid and Biggy run the conference: they fix breakdowns, guide lost atten
 
 ### Play online
 
-<https://trinkolin.github.io/overclocked/> runs in any current browser, on a laptop or a phone. Touch controls appear automatically on touch screens.
+<https://trinkolin.github.io/overclocked-improved/> runs in any current browser, on a laptop or a phone. Touch controls appear automatically on touch screens.
 
 ### Run locally
 
